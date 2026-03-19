@@ -36,16 +36,31 @@ _ALL_TYPES = VARIANT_TYPES | MODIFICATION_TYPES | PROCESSED_TYPES
 def _parse_attributes(raw: str) -> dict[str, str]:
     """Parse a GFF3 attributes column (column 9) into a dict.
 
-    Values are URL-decoded.  Attributes are separated by ``;`` and each
-    attribute has the form ``key=value``.
+    URL-decodes the entire string first, then splits on ``;`` only at
+    parenthesis depth 0 so that semicolons inside values like
+    ``N-linked (GlcNAc...; detail)`` are preserved correctly.
     """
+    decoded = unquote(raw)
     attrs: dict[str, str] = {}
-    for part in raw.split(";"):
-        part = part.strip()
-        if "=" not in part:
-            continue
-        key, _, value = part.partition("=")
-        attrs[key.strip()] = unquote(value.strip())
+    depth = 0
+    part_start = 0
+
+    def _store(segment: str) -> None:
+        segment = segment.strip()
+        if "=" in segment:
+            key, _, value = segment.partition("=")
+            attrs[key.strip()] = value.strip()
+
+    for i, ch in enumerate(decoded):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == ";" and depth == 0:
+            _store(decoded[part_start:i])
+            part_start = i + 1
+
+    _store(decoded[part_start:])
     return attrs
 
 

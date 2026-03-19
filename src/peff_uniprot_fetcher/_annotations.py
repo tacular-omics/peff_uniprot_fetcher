@@ -39,12 +39,18 @@ def _clean_mod_name(note: str) -> str:
 
     Takes the first semicolon-delimited part and strips qualifier
     suffixes like ``(by ...)``, ``(Microbial infection)``, and
-    ``alternate``.
+    ``alternate``.  Also ensures parentheses are balanced, since PEFF
+    uses ``(...)`` as item delimiters and an unclosed ``(`` in a name
+    would produce unreadable output.
     """
     name = note.split(";")[0].strip()
     # Remove parenthesized qualifiers at the end.
     name = re.sub(r"\s*\(.*?\)\s*$", "", name)
-    return name.strip()
+    name = name.strip()
+    # Safety net: strip all parens if they're unbalanced.
+    if name.count("(") != name.count(")"):
+        name = name.replace("(", "").replace(")", "")
+    return name
 
 
 def features_to_annotations(

@@ -1,0 +1,56 @@
+[project]
+name = "peff_uniprot_fetcher"
+version = "0.1.0"
+description = "A short description of the project."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pefftacular",
+]
+authors = [
+    { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }
+]
+maintainers = [
+    { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }
+]
+classifiers = [
+    # TODO
+]
+
+[project.scripts]
+fasta-to-peff = "peff_uniprot_fetcher._cli:fasta_to_peff_cli"
+fetch-peff = "peff_uniprot_fetcher._cli:fetch_peff_cli"
+download-uniprot = "peff_uniprot_fetcher._cli:download_uniprot_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/peff_uniprot_fetcher"]
+
+[tool.uv]
+package = true
+dev-dependencies = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.11",
+    "ty>=0.0.11",
+]
+
+[tool.uv.sources]
+pefftacular = { path = "/home/patrick-garrett/Repos/pefftacular", editable = true }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]

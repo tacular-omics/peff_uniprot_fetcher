@@ -53,7 +53,7 @@ def build_header(entries: list[SequenceEntry], db_version: str | None = None) ->
                 prefix=prefix,
                 db_name=db_name,
                 db_version=db_version,
-                db_source="https://www.uniprot.org",
+                db_sources=("https://www.uniprot.org",),
                 number_of_entries=counts[prefix],
                 sequence_type="AA",
             )

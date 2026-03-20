@@ -45,8 +45,6 @@ dev-dependencies = [
     "ty>=0.0.11",
 ]
 
-[tool.uv.sources]
-pefftacular = { git = "https://github.com/tacular-omics/pefftacular" }
 
 [tool.ruff]
 target-version = "py312"

@@ -1,4 +1,4 @@
-name: CI
+name: Python package
 
 on:
   push:
@@ -37,9 +37,11 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      - name: Configure git for private dependencies
+        run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - name: Install dependencies
-        # --no-sources: ignore [tool.uv.sources] so pefftacular is fetched from PyPI
-        run: uv sync --no-sources
+        run: uv sync
 
       - name: Lint with ruff
         run: just lint

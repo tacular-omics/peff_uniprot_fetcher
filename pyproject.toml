@@ -1,9 +1,11 @@
 [project]
 name = "peff_uniprot_fetcher"
 version = "0.1.0"
-description = "A short description of the project."
+description = "Fetch UniProt protein data and generate PEFF (PSI Extended FASTA Format) files."
 readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
     "pefftacular",
@@ -15,7 +17,12 @@ maintainers = [
     { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }
 ]
 classifiers = [
-    # TODO
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
 [project.scripts]
@@ -39,7 +46,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-pefftacular = { path = "/home/patrick-garrett/Repos/pefftacular", editable = true }
+pefftacular = { git = "https://github.com/tacular-omics/pefftacular" }
 
 [tool.ruff]
 target-version = "py312"

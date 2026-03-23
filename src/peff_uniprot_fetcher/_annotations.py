@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
-from pefftacular import ModRes, ModResPsi, Processed, VariantComplex, VariantSimple
+from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
+
+from peff_uniprot_fetcher._ptm import UniProtPtm
 
 VARIANT_PATTERN = re.compile(r"([A-Z]+)\s*->\s*([A-Z]+)")
 DBSNP_PATTERN = re.compile(r"dbSNP:(rs\d+)")
@@ -55,7 +57,7 @@ def _clean_mod_name(note: str) -> str:
 
 def features_to_annotations(
     features: list[dict],
-    ptm_map: dict[str, str],
+    ptm_map: dict[str, UniProtPtm],
 ) -> dict:
     """Convert GFF feature dicts to PEFF annotation tuples.
 
@@ -75,6 +77,7 @@ def features_to_annotations(
     """
     variant_simple: list[VariantSimple] = []
     variant_complex: list[VariantComplex] = []
+    mod_res_unimod: list[ModResUnimod] = []
     mod_res_psi: list[ModResPsi] = []
     mod_res: list[ModRes] = []
     processed: list[Processed] = []
@@ -113,10 +116,14 @@ def features_to_annotations(
             mod_name = _clean_mod_name(note)
             if not mod_name:
                 continue
-            psi_acc = ptm_map.get(mod_name)
-            if psi_acc:
+            ptm = ptm_map.get(mod_name)
+            if ptm and ptm.psi_mod:
                 mod_res_psi.append(
-                    ModResPsi(positions=(start,), accession=psi_acc, name=mod_name)
+                    ModResPsi(positions=(start,), accession=ptm.psi_mod, name=mod_name)
+                )
+            elif ptm and ptm.unimod is not None:
+                mod_res_unimod.append(
+                    ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=mod_name)
                 )
             else:
                 mod_res.append(
@@ -148,6 +155,7 @@ def features_to_annotations(
     return {
         "variant_simple": tuple(sorted(variant_simple, key=lambda v: v.position)),
         "variant_complex": tuple(sorted(variant_complex, key=lambda v: v.start_pos)),
+        "mod_res_unimod": tuple(sorted(mod_res_unimod, key=lambda m: m.positions[0])),
         "mod_res_psi": tuple(sorted(mod_res_psi, key=lambda m: m.positions[0])),
         "mod_res": tuple(sorted(mod_res, key=lambda m: m.positions[0])),
         "processed": tuple(sorted(processed, key=lambda p: p.start_pos)),

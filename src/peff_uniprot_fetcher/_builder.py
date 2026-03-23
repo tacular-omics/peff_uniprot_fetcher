@@ -32,6 +32,7 @@ def build_entry(fasta_entry: UniProtFastaEntry, annotations: dict) -> SequenceEn
         pe=fasta_entry.pe,
         variant_simple=annotations.get("variant_simple", ()),
         variant_complex=annotations.get("variant_complex", ()),
+        mod_res_unimod=annotations.get("mod_res_unimod", ()),
         mod_res_psi=annotations.get("mod_res_psi", ()),
         mod_res=annotations.get("mod_res", ()),
         processed=annotations.get("processed", ()),

@@ -1,12 +1,19 @@
 """Tests for GFF feature to PEFF annotation conversion."""
 
-from pefftacular import ModRes, ModResPsi, Processed, VariantComplex, VariantSimple
+from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
 
 from peff_uniprot_fetcher._annotations import features_to_annotations
+from peff_uniprot_fetcher._ptm import UniProtPtm
+
+_PTM = lambda id, psi_mod=None, unimod=None: UniProtPtm(  # noqa: E731
+    id=id, ac="", feature_key="MOD_RES", target="", mono_mass=None, avg_mass=None,
+    psi_mod=psi_mod, unimod=unimod,
+)
 
 PTM_MAP = {
-    "Phosphoserine": "MOD:00046",
-    "Phosphothreonine": "MOD:00047",
+    "Phosphoserine": _PTM("Phosphoserine", psi_mod="MOD:00046", unimod=21),
+    "Phosphothreonine": _PTM("Phosphothreonine", psi_mod="MOD:00047"),
+    "UnimodOnly": _PTM("UnimodOnly", unimod=340),
 }
 
 
@@ -186,10 +193,31 @@ def test_sorting():
     assert positions == [100, 200, 300]
 
 
+def test_modified_residue_unimod_only():
+    features = [
+        {
+            "feature": "Modified residue",
+            "start": 400,
+            "end": 400,
+            "attributes": {"Note": "UnimodOnly"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    assert len(result["mod_res_unimod"]) == 1
+    m = result["mod_res_unimod"][0]
+    assert isinstance(m, ModResUnimod)
+    assert m.positions == (400,)
+    assert m.accession == "340"
+    assert m.name == "UnimodOnly"
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res"] == ()
+
+
 def test_empty_features():
     result = features_to_annotations([], PTM_MAP)
     assert result["variant_simple"] == ()
     assert result["variant_complex"] == ()
+    assert result["mod_res_unimod"] == ()
     assert result["mod_res_psi"] == ()
     assert result["mod_res"] == ()
     assert result["processed"] == ()

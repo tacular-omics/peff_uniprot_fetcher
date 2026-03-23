@@ -23,6 +23,21 @@ def _annotation_flags(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Exclude processed form annotations (signal peptides, chains, etc.).",
     )
+    parser.add_argument(
+        "--glycosylation", action="store_true", help="Include glycosylation annotations (default: off)."
+    )
+    parser.add_argument("--lipidation", action="store_true", help="Include lipidation annotations (default: off).")
+    parser.add_argument("--crosslinks", action="store_true", help="Include cross-link annotations (default: off).")
+    parser.add_argument(
+        "--exclusive-mod-lists",
+        action="store_true",
+        help="Use exclusive modification lists (UniMod or PSI-MOD only, not both).",
+    )
+    parser.add_argument(
+        "--only-known-mass",
+        action="store_true",
+        help="Only include modifications with a known monoisotopic mass.",
+    )
 
 
 def fasta_to_peff_cli() -> None:
@@ -43,6 +58,11 @@ def fasta_to_peff_cli() -> None:
         include_variants=not args.no_variants,
         include_modifications=not args.no_modifications,
         include_processed=not args.no_processed,
+        include_glycosylation=args.glycosylation,
+        include_lipidation=args.lipidation,
+        include_crosslinks=args.crosslinks,
+        exclusive_mod_lists=args.exclusive_mod_lists,
+        only_known_mass=args.only_known_mass,
     )
     logging.info("Done. Written to %s", args.output)
 
@@ -86,6 +106,11 @@ def fetch_peff_cli() -> None:
         include_variants=not args.no_variants,
         include_modifications=not args.no_modifications,
         include_processed=not args.no_processed,
+        include_glycosylation=args.glycosylation,
+        include_lipidation=args.lipidation,
+        include_crosslinks=args.crosslinks,
+        exclusive_mod_lists=args.exclusive_mod_lists,
+        only_known_mass=args.only_known_mass,
     )
 
     if args.organism_id:

@@ -9,6 +9,7 @@ keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
     "pefftacular",
+    "tacular>=1.0.1",
 ]
 authors = [
     { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }

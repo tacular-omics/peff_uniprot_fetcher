@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 
 from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
+from tacular.psimod import PSIMOD_LOOKUP
+from tacular.unimod import UNIMOD_LOOKUP
 
 from peff_uniprot_fetcher._ptm import UniProtPtm
 
@@ -55,9 +57,28 @@ def _clean_mod_name(note: str) -> str:
     return name
 
 
+def _psi_name(accession: str) -> str:
+    """Return the canonical PSI-MOD name for *accession*, or *accession* if not found."""
+    try:
+        num = int(accession.split(":")[1])
+    except (IndexError, ValueError):
+        return accession
+    info = PSIMOD_LOOKUP.query_id(num)
+    return info.name if info is not None else accession
+
+
+def _unimod_name(accession: int) -> str:
+    """Return the canonical UniMod name for *accession*, or the numeric string if not found."""
+    info = UNIMOD_LOOKUP.query_id(accession)
+    return info.name if info is not None else str(accession)
+
+
 def features_to_annotations(
     features: list[dict],
     ptm_map: dict[str, UniProtPtm],
+    *,
+    exclusive_mod_lists: bool = False,
+    only_known_mass: bool = False,
 ) -> dict:
     """Convert GFF feature dicts to PEFF annotation tuples.
 
@@ -67,6 +88,12 @@ def features_to_annotations(
         List of feature dicts as returned by :func:`_gff.parse_gff`.
     ptm_map:
         Mapping of PTM name to PSI-MOD accession from :func:`_ptm.parse_ptmlist`.
+    exclusive_mod_lists:
+        When ``False`` (default) a modification is added to every list for
+        which it has a valid accession (PSI-MOD, UniMod, and/or formula).
+        When ``True`` each modification is placed in exactly one list using
+        the priority order PSI-MOD > UniMod > Custom (formula / fallback),
+        so the three lists never share an entry.
 
     Returns
     -------
@@ -117,18 +144,53 @@ def features_to_annotations(
             if not mod_name:
                 continue
             ptm = ptm_map.get(mod_name)
-            if ptm and ptm.psi_mod:
-                mod_res_psi.append(
-                    ModResPsi(positions=(start,), accession=ptm.psi_mod, name=mod_name)
-                )
-            elif ptm and ptm.unimod is not None:
-                mod_res_unimod.append(
-                    ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=mod_name)
-                )
+            has_mass = ptm is not None and ptm.mono_mass is not None
+            if exclusive_mod_lists:
+                if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
+                    mod_res_psi.append(
+                        ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod))
+                    )
+                elif ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
+                    mod_res_unimod.append(
+                        ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=_unimod_name(ptm.unimod))
+                    )
+                elif ptm and ptm.proforma_formula is not None:
+                    mod_res.append(
+                        ModRes(
+                            positions=(start,),
+                            accession=ptm.proforma_formula,
+                            name=mod_name,
+                        )
+                    )
+                elif not only_known_mass:
+                    mod_res.append(
+                        ModRes(positions=(start,), accession="", name=mod_name)
+                    )
             else:
-                mod_res.append(
-                    ModRes(positions=(start,), accession="", name=mod_name)
-                )
+                added = False
+                if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
+                    mod_res_psi.append(
+                        ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod))
+                    )
+                    added = True
+                if ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
+                    mod_res_unimod.append(
+                        ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=_unimod_name(ptm.unimod))
+                    )
+                    added = True
+                if ptm and ptm.proforma_formula is not None:
+                    mod_res.append(
+                        ModRes(
+                            positions=(start,),
+                            accession=ptm.proforma_formula,
+                            name=mod_name,
+                        )
+                    )
+                    added = True
+                if not added and not only_known_mass:
+                    mod_res.append(
+                        ModRes(positions=(start,), accession="", name=mod_name)
+                    )
 
         # -- Glycosylation / Lipidation ---------------------------------
         elif ftype in ("Glycosylation", "Lipidation"):

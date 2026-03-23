@@ -5,15 +5,16 @@ from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantCompl
 from peff_uniprot_fetcher._annotations import features_to_annotations
 from peff_uniprot_fetcher._ptm import UniProtPtm
 
-_PTM = lambda id, psi_mod=None, unimod=None: UniProtPtm(  # noqa: E731
-    id=id, ac="", feature_key="MOD_RES", target="", mono_mass=None, avg_mass=None,
-    psi_mod=psi_mod, unimod=unimod,
+_PTM = lambda id, psi_mod=None, unimod=None, formula=None: UniProtPtm(  # noqa: E731
+    id=id, ac="", feature_key="MOD_RES", target="", formula=formula,
+    mono_mass=None, avg_mass=None, psi_mod=psi_mod, unimod=unimod,
 )
 
 PTM_MAP = {
     "Phosphoserine": _PTM("Phosphoserine", psi_mod="MOD:00046", unimod=21),
     "Phosphothreonine": _PTM("Phosphothreonine", psi_mod="MOD:00047"),
     "UnimodOnly": _PTM("UnimodOnly", unimod=340),
+    "CustomWithFormula": _PTM("CustomWithFormula", formula="C1 H2 O2 S1"),
 }
 
 
@@ -83,7 +84,7 @@ def test_modified_residue_with_psi():
     assert isinstance(m, ModResPsi)
     assert m.positions == (200,)
     assert m.accession == "MOD:00046"
-    assert m.name == "Phosphoserine"
+    assert m.name == "O-phospho-L-serine"
 
 
 def test_modified_residue_without_psi():
@@ -114,7 +115,7 @@ def test_modified_residue_strips_qualifiers():
     ]
     result = features_to_annotations(features, PTM_MAP)
     assert len(result["mod_res_psi"]) == 1
-    assert result["mod_res_psi"][0].name == "Phosphoserine"
+    assert result["mod_res_psi"][0].name == "O-phospho-L-serine"
 
 
 def test_glycosylation():
@@ -208,9 +209,28 @@ def test_modified_residue_unimod_only():
     assert isinstance(m, ModResUnimod)
     assert m.positions == (400,)
     assert m.accession == "340"
-    assert m.name == "UnimodOnly"
+    assert m.name == "Bromo"
     assert result["mod_res_psi"] == ()
     assert result["mod_res"] == ()
+
+
+def test_modified_residue_custom_with_formula():
+    features = [
+        {
+            "feature": "Modified residue",
+            "start": 500,
+            "end": 500,
+            "attributes": {"Note": "CustomWithFormula"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
+    assert len(result["mod_res"]) == 1
+    m = result["mod_res"][0]
+    assert isinstance(m, ModRes)
+    assert m.accession == "Formula:C1H2O2S1|INFO:CustomWithFormula"
+    assert m.name == "CustomWithFormula"
 
 
 def test_empty_features():
@@ -221,3 +241,64 @@ def test_empty_features():
     assert result["mod_res_psi"] == ()
     assert result["mod_res"] == ()
     assert result["processed"] == ()
+
+
+# -- exclusive_mod_lists=True tests -----------------------------------------
+
+def _mod_feature(pos: int, note: str) -> dict:
+    return {"feature": "Modified residue", "start": pos, "end": pos, "attributes": {"Note": note}}
+
+
+def test_exclusive_psi_wins():
+    """PSI-MOD takes priority; entry absent from unimod and custom lists."""
+    result = features_to_annotations([_mod_feature(10, "Phosphoserine")], PTM_MAP, exclusive_mod_lists=True)
+    assert len(result["mod_res_psi"]) == 1
+    assert result["mod_res_psi"][0].accession == "MOD:00046"
+    assert result["mod_res_unimod"] == ()
+    assert result["mod_res"] == ()
+
+
+def test_exclusive_unimod_fallback():
+    """UniMod used when PSI-MOD is absent."""
+    result = features_to_annotations([_mod_feature(20, "UnimodOnly")], PTM_MAP, exclusive_mod_lists=True)
+    assert result["mod_res_psi"] == ()
+    assert len(result["mod_res_unimod"]) == 1
+    assert result["mod_res_unimod"][0].accession == "340"
+    assert result["mod_res"] == ()
+
+
+def test_exclusive_custom_fallback():
+    """Custom formula used when neither PSI-MOD nor UniMod is present."""
+    result = features_to_annotations([_mod_feature(30, "CustomWithFormula")], PTM_MAP, exclusive_mod_lists=True)
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
+    assert len(result["mod_res"]) == 1
+    assert "Formula:" in result["mod_res"][0].accession
+
+
+def test_exclusive_unknown_mod_fallback():
+    """Unknown mod falls through to empty-accession custom entry."""
+    result = features_to_annotations([_mod_feature(40, "SomeUnknownMod")], PTM_MAP, exclusive_mod_lists=True)
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
+    assert len(result["mod_res"]) == 1
+    assert result["mod_res"][0].accession == ""
+
+
+def test_exclusive_no_overlap_multi():
+    """With multiple mods, none appear in more than one list."""
+    features = [
+        _mod_feature(10, "Phosphoserine"),   # has psi_mod + unimod
+        _mod_feature(20, "UnimodOnly"),      # has unimod only
+        _mod_feature(30, "CustomWithFormula"),  # has formula only
+    ]
+    result = features_to_annotations(features, PTM_MAP, exclusive_mod_lists=True)
+    psi_positions = {m.positions[0] for m in result["mod_res_psi"]}
+    uni_positions = {m.positions[0] for m in result["mod_res_unimod"]}
+    custom_positions = {m.positions[0] for m in result["mod_res"]}
+    assert psi_positions & uni_positions == set()
+    assert psi_positions & custom_positions == set()
+    assert uni_positions & custom_positions == set()
+    assert psi_positions == {10}
+    assert uni_positions == {20}
+    assert custom_positions == {30}

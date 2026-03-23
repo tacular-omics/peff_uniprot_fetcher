@@ -62,11 +62,11 @@ download-uniprot --organism-id 9606 --formats gff --output-dir data/human
 
 All `fetch-peff` and `fasta-to-peff` commands accept:
 
-| Flag | Effect |
-|---|---|
-| `--no-variants` | Exclude sequence variants (`VariantSimple`, `VariantComplex`) |
-| `--no-modifications` | Exclude PTMs (`ModResPsi`, `ModRes`) |
-| `--no-processed` | Exclude processed forms (`Signal peptide`, `Chain`, etc.) |
+| Flag | Default | Effect |
+|---|---|---|
+| `--no-variants` | variants on | Exclude sequence variants (`VariantSimple`, `VariantComplex`) |
+| `--no-modifications` | modifications on | Exclude PTMs (`ModResPsi`, `ModResUnimod`, `ModRes`) |
+| `--no-processed` | processed on | Exclude processed forms (`Signal peptide`, `Chain`, etc.) |
 
 ## Python API
 
@@ -86,6 +86,18 @@ fasta_to_peff_file("input.fasta", "output.peff")
 header, entries = fasta_to_peff("input.fasta")
 ```
 
+The Python API exposes the full set of annotation flags. All flags default to the same values as the CLI:
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `include_variants` | `True` | Include sequence variants |
+| `include_modifications` | `True` | Include PTMs (`ModResPsi`, `ModResUnimod`, `ModRes`) |
+| `include_processed` | `True` | Include processed forms |
+| `include_glycosylation` | `False` | Include glycosylation sites (`ModRes`) |
+| `include_lipidation` | `False` | Include lipidation sites (`ModRes`) |
+| `include_crosslinks` | `False` | Include cross-links (`ModRes`) |
+| `exclusive_mod_lists` | `False` | Place each modification in exactly one list using priority PSI-MOD > UniMod > Custom formula, instead of all applicable lists simultaneously |
+
 ## PEFF annotations
 
 The following UniProt GFF feature types are mapped to PEFF annotations:
@@ -94,7 +106,9 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 |---|---|
 | Natural variant, Mutagenesis, Sequence conflict | `VariantSimple` / `VariantComplex` |
 | Alternative sequence (isoform) | `VariantComplex` |
-| Modified residue | `ModResPsi` (with PSI-MOD accession) or `ModRes` |
+| Modified residue (PSI-MOD cross-ref) | `ModResPsi` |
+| Modified residue (UniMod cross-ref) | `ModResUnimod` |
+| Modified residue (formula or fallback) | `ModRes` |
 | Glycosylation, Lipidation, Cross-link | `ModRes` |
 | Signal peptide | `Processed` (`PEFF:0001001`) |
 | Transit peptide | `Processed` (`PEFF:0001002`) |
@@ -102,7 +116,26 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 | Chain (mature protein) | `Processed` (`PEFF:0001004`) |
 | Peptide | `Processed` (`PEFF:0001005`) |
 
-PTM names are mapped to PSI-MOD accessions using the [UniProt PTM list](https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/docs/ptmlist.txt).
+By default a modified residue with both a PSI-MOD and UniMod cross-reference appears in both `ModResPsi` and `ModResUnimod` simultaneously. Set `exclusive_mod_lists=True` (Python) to assign each residue to exactly one list.
+
+### PTM name resolution
+
+`ModResPsi` and `ModResUnimod` entries use the **canonical ontology name** from [tacular](https://github.com/pgarrett-scripps/tacular) (PSI-MOD or UniMod) rather than the UniProt ptmlist name. For example, a phosphoserine site is written as `2|MOD:00046|O-phospho-L-serine` instead of `2|MOD:00046|Phosphoserine`.
+
+PTM entries that have PSI-MOD or UniMod cross-references but lack a formula or mass in UniProt's ptmlist are automatically enriched with masses and formulas from tacular at load time.
+
+## Human proteome script
+
+`scripts/human_proteome_peff.py` generates a PEFF file for the reviewed human proteome and prints per-feature-type modification statistics (PSI-MOD / UniMod / both / custom / none counts, has-mass counts, top N modification names).
+
+```bash
+uv run python scripts/human_proteome_peff.py [OUTPUT] [--query QUERY] \
+    [--include-glycosylation] [--include-lipidation] [--include-crosslinks] \
+    [--no-variants] [--no-modifications] [--no-processed] \
+    [--exclusive-mod-lists] [--top-n N]
+```
+
+`OUTPUT` defaults to `human_proteome.peff`. The `--include-*` flags opt in to feature types that are off by default; `--no-*` flags turn off features that are on by default.
 
 ## Just recipes
 

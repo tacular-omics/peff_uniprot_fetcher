@@ -140,11 +140,12 @@ def fetch_peff(
         log.info("Parsed %d sequences from FASTA", len(fasta_entries))
         all_features = _fetch_gff_per_accession(accessions)
     else:
+        assert query is not None  # narrowed by the check above
         log.info("Fetching FASTA...")
-        fasta_entries = parse_fasta(stream_search(query, fmt="fasta"))  # type: ignore[arg-type]
+        fasta_entries = parse_fasta(stream_search(query, fmt="fasta"))
         log.info("Parsed %d sequences from FASTA", len(fasta_entries))
         log.info("Fetching GFF annotations (this may take a while for large result sets)...")
-        all_features = parse_gff(stream_search(query, fmt="gff"))  # type: ignore[arg-type]
+        all_features = parse_gff(stream_search(query, fmt="gff"))
         log.info("Parsed GFF annotations for %d accessions", len(all_features))
 
     return _build_entries(

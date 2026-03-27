@@ -9,7 +9,9 @@ keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
     "pefftacular",
-    "tacular>=1.0.1",
+    "psimodpy",
+    "unimodpy",
+    "uniprotptmpy",
 ]
 authors = [
     { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }
@@ -62,4 +64,6 @@ select = [
 ]
 
 [tool.uv.sources]
-tacular = { path = "../tacular", editable = true }
+psimodpy = { path = "../psimodpy", editable = true }
+unimodpy = { path = "../unimodpy", editable = true }
+uniprotptmpy = { path = "../uniprotptmpy", editable = true }

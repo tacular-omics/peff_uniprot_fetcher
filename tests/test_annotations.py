@@ -1,20 +1,31 @@
 """Tests for GFF feature to PEFF annotation conversion."""
 
 from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
+from uniprotptmpy import CrossReference, PtmEntry
 
 from peff_uniprot_fetcher._annotations import features_to_annotations
-from peff_uniprot_fetcher._ptm import UniProtPtm
 
-_PTM = lambda id, psi_mod=None, unimod=None, formula=None: UniProtPtm(  # noqa: E731
-    id=id, ac="", feature_key="MOD_RES", target="", formula=formula,
-    mono_mass=None, avg_mass=None, psi_mod=psi_mod, unimod=unimod,
-)
+
+def _make_ptm(name, psi_mod=None, unimod=None, formula=None):  # noqa: E731
+    xrefs = []
+    if psi_mod:
+        xrefs.append(CrossReference("PSI-MOD", psi_mod))
+    if unimod is not None:
+        xrefs.append(CrossReference("Unimod", str(unimod)))
+    return PtmEntry(
+        id="", name=name, feature_type="MOD_RES", target="",
+        amino_acid_position=None, polypeptide_position=None,
+        correction_formula=formula, monoisotopic_mass=None, average_mass=None,
+        cellular_location=None, taxonomic_ranges=(), keywords=(),
+        cross_references=tuple(xrefs),
+    )
+
 
 PTM_MAP = {
-    "Phosphoserine": _PTM("Phosphoserine", psi_mod="MOD:00046", unimod=21),
-    "Phosphothreonine": _PTM("Phosphothreonine", psi_mod="MOD:00047"),
-    "UnimodOnly": _PTM("UnimodOnly", unimod=340),
-    "CustomWithFormula": _PTM("CustomWithFormula", formula="C1 H2 O2 S1"),
+    "Phosphoserine": _make_ptm("Phosphoserine", psi_mod="MOD:00046", unimod=21),
+    "Phosphothreonine": _make_ptm("Phosphothreonine", psi_mod="MOD:00047"),
+    "UnimodOnly": _make_ptm("UnimodOnly", unimod=340),
+    "CustomWithFormula": _make_ptm("CustomWithFormula", formula="C1 H2 O2 S1"),
 }
 
 
@@ -229,7 +240,7 @@ def test_modified_residue_custom_with_formula():
     assert len(result["mod_res"]) == 1
     m = result["mod_res"][0]
     assert isinstance(m, ModRes)
-    assert m.accession == "Formula:C1H2O2S1"
+    assert m.accession == "Formula:CH2O2S"
     assert m.name == "CustomWithFormula"
 
 

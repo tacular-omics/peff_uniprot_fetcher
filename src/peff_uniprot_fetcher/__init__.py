@@ -69,7 +69,6 @@ def _build_entries(
     include_lipidation: bool,
     include_crosslinks: bool,
     include_processed: bool,
-    exclusive_mod_lists: bool,
     only_known_mass: bool = False,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
     if include_modifications:
@@ -82,8 +81,7 @@ def _build_entries(
     missing_gff = [e.accession for e in fasta_entries if e.accession not in all_features]
     if missing_gff:
         log.warning(
-            "%d/%d entries have no GFF features (first: %r). "
-            "GFF accession keys may not match FASTA accessions.",
+            "%d/%d entries have no GFF features (first: %r). GFF accession keys may not match FASTA accessions.",
             len(missing_gff),
             len(fasta_entries),
             missing_gff[0],
@@ -109,7 +107,9 @@ def _build_entries(
                 filtered.append(feat)
 
         annotations = features_to_annotations(
-            filtered, ptm_map, exclusive_mod_lists=exclusive_mod_lists, only_known_mass=only_known_mass
+            filtered,
+            ptm_map,
+            only_known_mass=only_known_mass,
         )
         entries.append(build_entry(fasta_entry, annotations))
 
@@ -126,7 +126,6 @@ def fetch_peff(
     include_lipidation: bool = False,
     include_crosslinks: bool = False,
     include_processed: bool = True,
-    exclusive_mod_lists: bool = False,
     only_known_mass: bool = False,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
     """Fetch proteins from UniProt and return ``(header, entries)`` for writing as PEFF.
@@ -149,10 +148,15 @@ def fetch_peff(
         log.info("Parsed GFF annotations for %d accessions", len(all_features))
 
     return _build_entries(
-        fasta_entries, all_features,
-        include_variants, include_modifications,
-        include_glycosylation, include_lipidation, include_crosslinks,
-        include_processed, exclusive_mod_lists, only_known_mass,
+        fasta_entries,
+        all_features,
+        include_variants,
+        include_modifications,
+        include_glycosylation,
+        include_lipidation,
+        include_crosslinks,
+        include_processed,
+        only_known_mass,
     )
 
 
@@ -164,7 +168,6 @@ def fasta_to_peff(
     include_lipidation: bool = False,
     include_crosslinks: bool = False,
     include_processed: bool = True,
-    exclusive_mod_lists: bool = False,
     only_known_mass: bool = False,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
     """Read a local UniProt FASTA file and annotate from UniProt, returning ``(header, entries)``.
@@ -178,10 +181,15 @@ def fasta_to_peff(
     all_features = _fetch_gff_per_accession([e.accession for e in fasta_entries])
 
     return _build_entries(
-        fasta_entries, all_features,
-        include_variants, include_modifications,
-        include_glycosylation, include_lipidation, include_crosslinks,
-        include_processed, exclusive_mod_lists, only_known_mass,
+        fasta_entries,
+        all_features,
+        include_variants,
+        include_modifications,
+        include_glycosylation,
+        include_lipidation,
+        include_crosslinks,
+        include_processed,
+        only_known_mass,
     )
 
 
@@ -195,7 +203,6 @@ def fetch_peff_to_file(
     include_lipidation: bool = False,
     include_crosslinks: bool = False,
     include_processed: bool = True,
-    exclusive_mod_lists: bool = False,
     only_known_mass: bool = False,
 ) -> None:
     """Fetch proteins from UniProt and write directly to a PEFF file."""
@@ -208,7 +215,6 @@ def fetch_peff_to_file(
         include_lipidation=include_lipidation,
         include_crosslinks=include_crosslinks,
         include_processed=include_processed,
-        exclusive_mod_lists=exclusive_mod_lists,
         only_known_mass=only_known_mass,
     )
     write_peff(header, entries, output)
@@ -223,7 +229,6 @@ def fasta_to_peff_file(
     include_lipidation: bool = False,
     include_crosslinks: bool = False,
     include_processed: bool = True,
-    exclusive_mod_lists: bool = False,
     only_known_mass: bool = False,
 ) -> None:
     """Read a local UniProt FASTA file, annotate from UniProt, and write a PEFF file."""
@@ -235,7 +240,6 @@ def fasta_to_peff_file(
         include_lipidation=include_lipidation,
         include_crosslinks=include_crosslinks,
         include_processed=include_processed,
-        exclusive_mod_lists=exclusive_mod_lists,
         only_known_mass=only_known_mass,
     )
     write_peff(header, entries, output)

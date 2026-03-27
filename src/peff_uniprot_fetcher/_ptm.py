@@ -48,6 +48,7 @@ class UniProtPtm:
     avg_mass: float | None
     psi_mod: str | None
     unimod: int | None
+    pp: str = "Anywhere"
 
     @property
     def proforma_formula(self) -> str | None:
@@ -74,6 +75,7 @@ def parse_ptmlist(text: str) -> dict[str, UniProtPtm]:
     current_ac: str = ""
     current_ft: str = ""
     current_tg: str = ""
+    current_pp: str = "Anywhere"
     current_cf: str | None = None
     current_mm: float | None = None
     current_ma: float | None = None
@@ -87,6 +89,8 @@ def parse_ptmlist(text: str) -> dict[str, UniProtPtm]:
             current_ac = line[5:].strip()
         elif line.startswith("FT   "):
             current_ft = line[5:].strip()
+        elif line.startswith("PP   "):
+            current_pp = line[5:].strip().rstrip(".")
         elif line.startswith("TG   "):
             current_tg = line[5:].strip().rstrip(".")
         elif line.startswith("CF   "):
@@ -117,6 +121,7 @@ def parse_ptmlist(text: str) -> dict[str, UniProtPtm]:
                     ac=current_ac,
                     feature_key=current_ft,
                     target=current_tg,
+                    pp=current_pp,
                     formula=current_cf,
                     mono_mass=current_mm,
                     avg_mass=current_ma,
@@ -127,6 +132,7 @@ def parse_ptmlist(text: str) -> dict[str, UniProtPtm]:
             current_ac = ""
             current_ft = ""
             current_tg = ""
+            current_pp = "Anywhere"
             current_cf = None
             current_mm = None
             current_ma = None
@@ -167,10 +173,7 @@ def _enrich_from_tacular(
         # Convert dict_composition → UniProt "El1 El2 ..." format
         formula: str | None = None
         if info.dict_composition:
-            formula = " ".join(
-                f"{el}{cnt}"
-                for el, cnt in sorted(info.dict_composition.items())
-            )
+            formula = " ".join(f"{el}{cnt}" for el, cnt in sorted(info.dict_composition.items()))
 
         enriched[name] = replace(
             ptm,

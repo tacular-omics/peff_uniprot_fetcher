@@ -60,3 +60,6 @@ select = [
     "B",   # flake8-bugbear
     "UP",  # pyupgrade
 ]
+
+[tool.uv.sources]
+tacular = { path = "../tacular", editable = true }

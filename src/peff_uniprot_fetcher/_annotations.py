@@ -21,19 +21,23 @@ PROCESSED_ACCESSIONS: dict[str, tuple[str, str]] = {
     "Peptide": ("PEFF:0001005", "peptide"),
 }
 
-_VARIANT_FEATURES = frozenset({
-    "Natural variant",
-    "Mutagenesis",
-    "Alternative sequence",
-    "Sequence conflict",
-})
+_VARIANT_FEATURES = frozenset(
+    {
+        "Natural variant",
+        "Mutagenesis",
+        "Alternative sequence",
+        "Sequence conflict",
+    }
+)
 
-_MODIFICATION_FEATURES = frozenset({
-    "Modified residue",
-    "Glycosylation",
-    "Lipidation",
-    "Cross-link",
-})
+_MODIFICATION_FEATURES = frozenset(
+    {
+        "Modified residue",
+        "Glycosylation",
+        "Lipidation",
+        "Cross-link",
+    }
+)
 
 _PROCESSED_FEATURES = frozenset(PROCESSED_ACCESSIONS)
 
@@ -58,26 +62,25 @@ def _clean_mod_name(note: str) -> str:
 
 
 def _psi_name(accession: str) -> str:
-    """Return the canonical PSI-MOD name for *accession*, or *accession* if not found."""
+    """Return the PSI-MOD name for *accession* prefixed with ``M:``, or ``M:{accession}`` if not found."""
     try:
         num = int(accession.split(":")[1])
     except (IndexError, ValueError):
-        return accession
+        return f"M:{accession}"
     info = PSIMOD_LOOKUP.query_id(num)
-    return info.name if info is not None else accession
+    return f"M:{info.name}" if info is not None else f"M:{accession}"
 
 
 def _unimod_name(accession: int) -> str:
-    """Return the canonical UniMod name for *accession*, or the numeric string if not found."""
+    """Return the UniMod name for *accession* prefixed with ``U:``, or ``U:{accession}`` if not found."""
     info = UNIMOD_LOOKUP.query_id(accession)
-    return info.name if info is not None else str(accession)
+    return f"U:{info.name}" if info is not None else f"U:{accession}"
 
 
 def features_to_annotations(
     features: list[dict],
     ptm_map: dict[str, UniProtPtm],
     *,
-    exclusive_mod_lists: bool = False,
     only_known_mass: bool = False,
 ) -> dict:
     """Convert GFF feature dicts to PEFF annotation tuples.
@@ -88,12 +91,6 @@ def features_to_annotations(
         List of feature dicts as returned by :func:`_gff.parse_gff`.
     ptm_map:
         Mapping of PTM name to PSI-MOD accession from :func:`_ptm.parse_ptmlist`.
-    exclusive_mod_lists:
-        When ``False`` (default) a modification is added to every list for
-        which it has a valid accession (PSI-MOD, UniMod, and/or formula).
-        When ``True`` each modification is placed in exactly one list using
-        the priority order PSI-MOD > UniMod > Custom (formula / fallback),
-        so the three lists never share an entry.
 
     Returns
     -------
@@ -126,17 +123,11 @@ def features_to_annotations(
                 tag = dbsnp_match.group(1) if dbsnp_match else None
 
                 if start == end and len(original) == 1 and len(mutant) == 1:
-                    variant_simple.append(
-                        VariantSimple(position=start, new_amino_acid=mutant, tag=tag)
-                    )
+                    variant_simple.append(VariantSimple(position=start, new_amino_acid=mutant, tag=tag))
                 else:
-                    variant_complex.append(
-                        VariantComplex(start_pos=start, end_pos=end, new_sequence=mutant, tag=tag)
-                    )
+                    variant_complex.append(VariantComplex(start_pos=start, end_pos=end, new_sequence=mutant, tag=tag))
             elif "Missing" in note:
-                variant_complex.append(
-                    VariantComplex(start_pos=start, end_pos=end, new_sequence="")
-                )
+                variant_complex.append(VariantComplex(start_pos=start, end_pos=end, new_sequence=""))
 
         # -- Modified residue -------------------------------------------
         elif ftype == "Modified residue":
@@ -145,74 +136,43 @@ def features_to_annotations(
                 continue
             ptm = ptm_map.get(mod_name)
             has_mass = ptm is not None and ptm.mono_mass is not None
-            if exclusive_mod_lists:
-                if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
-                    mod_res_psi.append(
-                        ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod))
+            added = False
+            if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
+                mod_res_psi.append(ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod)))
+                added = True
+            if ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
+                mod_res_unimod.append(
+                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{ptm.unimod}", name=_unimod_name(ptm.unimod))
+                )
+                added = True
+            if ptm and ptm.proforma_formula is not None:
+                mod_res.append(
+                    ModRes(
+                        positions=(start,),
+                        accession=ptm.proforma_formula,
+                        name=mod_name,
                     )
-                elif ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
-                    mod_res_unimod.append(
-                        ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=_unimod_name(ptm.unimod))
-                    )
-                elif ptm and ptm.proforma_formula is not None:
-                    mod_res.append(
-                        ModRes(
-                            positions=(start,),
-                            accession=ptm.proforma_formula,
-                            name=mod_name,
-                        )
-                    )
-                elif not only_known_mass:
-                    mod_res.append(
-                        ModRes(positions=(start,), accession="", name=mod_name)
-                    )
-            else:
-                added = False
-                if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
-                    mod_res_psi.append(
-                        ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod))
-                    )
-                    added = True
-                if ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
-                    mod_res_unimod.append(
-                        ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=_unimod_name(ptm.unimod))
-                    )
-                    added = True
-                if ptm and ptm.proforma_formula is not None:
-                    mod_res.append(
-                        ModRes(
-                            positions=(start,),
-                            accession=ptm.proforma_formula,
-                            name=mod_name,
-                        )
-                    )
-                    added = True
-                if not added and not only_known_mass:
-                    mod_res.append(
-                        ModRes(positions=(start,), accession="", name=mod_name)
-                    )
+                )
+                added = True
+
+            if not added and not only_known_mass:
+                mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
 
         # -- Glycosylation / Lipidation ---------------------------------
         elif ftype in ("Glycosylation", "Lipidation"):
             mod_name = _clean_mod_name(note) if note else ftype
-            mod_res.append(
-                ModRes(positions=(start,), accession="", name=mod_name)
-            )
+            mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
 
         # -- Cross-link -------------------------------------------------
         elif ftype == "Cross-link":
             mod_name = _clean_mod_name(note) if note else "Cross-link"
             positions = (start, end) if start != end else (start,)
-            mod_res.append(
-                ModRes(positions=positions, accession="", name=mod_name)
-            )
+            mod_res.append(ModRes(positions=positions, accession="", name=mod_name))
 
         # -- Processed features -----------------------------------------
         elif ftype in _PROCESSED_FEATURES:
             acc, name = PROCESSED_ACCESSIONS[ftype]
-            processed.append(
-                Processed(start_pos=start, end_pos=end, accession=acc, name=name)
-            )
+            processed.append(Processed(start_pos=start, end_pos=end, accession=acc, name=name))
 
     return {
         "variant_simple": tuple(sorted(variant_simple, key=lambda v: v.position)),

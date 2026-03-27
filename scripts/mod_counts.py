@@ -13,7 +13,7 @@ from peff_uniprot_fetcher._ptm import get_ptm_map
 def _build_mass_lookups(ptm_map: dict) -> tuple[dict[str, bool], dict[str, bool]]:
     """Return (psi_accession -> has_mass, unimod_accession -> has_mass) dicts."""
     psi = {v.psi_mod: v.mono_mass is not None for v in ptm_map.values() if v.psi_mod}
-    unimod = {str(v.unimod): v.mono_mass is not None for v in ptm_map.values() if v.unimod is not None}
+    unimod = {f"UNIMOD:{v.unimod}": v.mono_mass is not None for v in ptm_map.values() if v.unimod is not None}
     return psi, unimod
 
 

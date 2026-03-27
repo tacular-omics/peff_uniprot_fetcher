@@ -63,7 +63,3 @@ select = [
     "UP",  # pyupgrade
 ]
 
-[tool.uv.sources]
-psimodpy = { path = "../psimodpy", editable = true }
-unimodpy = { path = "../unimodpy", editable = true }
-uniprotptmpy = { path = "../uniprotptmpy", editable = true }

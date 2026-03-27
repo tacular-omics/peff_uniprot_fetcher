@@ -9,9 +9,9 @@ keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
     "pefftacular",
-    "psimodpy",
-    "unimodpy",
-    "uniprotptmpy",
+    "psimodpy>=0.1.2",
+    "unimodpy>=0.1.1",
+    "uniprotptmpy>=0.1.0",
 ]
 authors = [
     { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }

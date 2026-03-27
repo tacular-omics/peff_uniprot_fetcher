@@ -14,14 +14,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from pefftacular import write_peff
+from uniprotptmpy import PtmEntry
 
 from peff_uniprot_fetcher._annotations import _clean_mod_name, features_to_annotations
 from peff_uniprot_fetcher._builder import build_entry, build_header
 from peff_uniprot_fetcher._client import stream_search
 from peff_uniprot_fetcher._fasta import parse_fasta
 from peff_uniprot_fetcher._gff import parse_gff
-from uniprotptmpy import PtmEntry
-
 from peff_uniprot_fetcher._ptm import get_ptm_map, psi_mod_accession, unimod_accession
 
 log = logging.getLogger(__name__)
@@ -120,7 +119,10 @@ def print_stats(
     print(f"  With monoisotopic mass:      {grand_mass:,}  ({grand_mass / max(grand_total + grand_mass, 1):.1%})")
     print()
 
-    header = f"{'Feature':10}  {'Total':>8}  {'has_mass':>9}  {'PSI-only':>9}  {'Uni-only':>9}  {'Both':>6}  {'Custom':>7}  {'None':>6}"
+    header = (
+        f"{'Feature':10}  {'Total':>8}  {'has_mass':>9}  {'PSI-only':>9}  "
+        f"{'Uni-only':>9}  {'Both':>6}  {'Custom':>7}  {'None':>6}"
+    )
     print(header)
     print("-" * len(header))
 

@@ -9,7 +9,10 @@ from uniprotptmpy import PtmEntry
 
 from peff_uniprot_fetcher._ptm import get_ptm_map, psi_mod_accession, unimod_accession
 
-FIELDS = ["name", "id", "feature_type", "target", "correction_formula", "proforma_formula", "monoisotopic_mass", "average_mass", "psi_mod", "unimod"]
+FIELDS = [
+    "name", "id", "feature_type", "target", "correction_formula",
+    "proforma_formula", "monoisotopic_mass", "average_mass", "psi_mod", "unimod",
+]
 
 
 def write_tsv(path: Path, entries: list[PtmEntry]) -> None:

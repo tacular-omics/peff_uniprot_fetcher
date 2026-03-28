@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 
+import psimodpy
+import unimodpy
 from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
+from uniprotptmpy import PtmEntry
 
-from peff_uniprot_fetcher._ptm import UniProtPtm
+from peff_uniprot_fetcher._ptm import psi_mod_accession, unimod_accession
 
 VARIANT_PATTERN = re.compile(r"([A-Z]+)\s*->\s*([A-Z]+)")
 DBSNP_PATTERN = re.compile(r"dbSNP:(rs\d+)")
@@ -19,21 +22,42 @@ PROCESSED_ACCESSIONS: dict[str, tuple[str, str]] = {
     "Peptide": ("PEFF:0001005", "peptide"),
 }
 
-_VARIANT_FEATURES = frozenset({
-    "Natural variant",
-    "Mutagenesis",
-    "Alternative sequence",
-    "Sequence conflict",
-})
+_VARIANT_FEATURES = frozenset(
+    {
+        "Natural variant",
+        "Mutagenesis",
+        "Alternative sequence",
+        "Sequence conflict",
+    }
+)
 
-_MODIFICATION_FEATURES = frozenset({
-    "Modified residue",
-    "Glycosylation",
-    "Lipidation",
-    "Cross-link",
-})
+_MODIFICATION_FEATURES = frozenset(
+    {
+        "Modified residue",
+        "Glycosylation",
+        "Lipidation",
+        "Cross-link",
+    }
+)
 
 _PROCESSED_FEATURES = frozenset(PROCESSED_ACCESSIONS)
+
+_psimod_db: psimodpy.PsiModDatabase | None = None
+_unimod_db: unimodpy.UnimodDatabase | None = None
+
+
+def _get_psimod_db() -> psimodpy.PsiModDatabase:
+    global _psimod_db  # noqa: PLW0603
+    if _psimod_db is None:
+        _psimod_db = psimodpy.load()
+    return _psimod_db
+
+
+def _get_unimod_db() -> unimodpy.UnimodDatabase:
+    global _unimod_db  # noqa: PLW0603
+    if _unimod_db is None:
+        _unimod_db = unimodpy.load()
+    return _unimod_db
 
 
 def _clean_mod_name(note: str) -> str:
@@ -55,9 +79,27 @@ def _clean_mod_name(note: str) -> str:
     return name
 
 
+def _psi_name(accession: str) -> str:
+    """Return the PSI-MOD name for *accession* prefixed with ``M:``, or ``M:{accession}`` if not found."""
+    try:
+        num = int(accession.split(":")[1])
+    except (IndexError, ValueError):
+        return f"M:{accession}"
+    info = _get_psimod_db().get_by_id(num)
+    return f"M:{info.name}" if info is not None else f"M:{accession}"
+
+
+def _unimod_name(accession: int) -> str:
+    """Return the UniMod name for *accession* prefixed with ``U:``, or ``U:{accession}`` if not found."""
+    info = _get_unimod_db().get_by_id(accession)
+    return f"U:{info.name}" if info is not None else f"U:{accession}"
+
+
 def features_to_annotations(
     features: list[dict],
-    ptm_map: dict[str, UniProtPtm],
+    ptm_map: dict[str, PtmEntry],
+    *,
+    only_known_mass: bool = False,
 ) -> dict:
     """Convert GFF feature dicts to PEFF annotation tuples.
 
@@ -66,7 +108,7 @@ def features_to_annotations(
     features:
         List of feature dicts as returned by :func:`_gff.parse_gff`.
     ptm_map:
-        Mapping of PTM name to PSI-MOD accession from :func:`_ptm.parse_ptmlist`.
+        Mapping of PTM name to :class:`~uniprotptmpy.PtmEntry`.
 
     Returns
     -------
@@ -99,17 +141,11 @@ def features_to_annotations(
                 tag = dbsnp_match.group(1) if dbsnp_match else None
 
                 if start == end and len(original) == 1 and len(mutant) == 1:
-                    variant_simple.append(
-                        VariantSimple(position=start, new_amino_acid=mutant, tag=tag)
-                    )
+                    variant_simple.append(VariantSimple(position=start, new_amino_acid=mutant, tag=tag))
                 else:
-                    variant_complex.append(
-                        VariantComplex(start_pos=start, end_pos=end, new_sequence=mutant, tag=tag)
-                    )
+                    variant_complex.append(VariantComplex(start_pos=start, end_pos=end, new_sequence=mutant, tag=tag))
             elif "Missing" in note:
-                variant_complex.append(
-                    VariantComplex(start_pos=start, end_pos=end, new_sequence="")
-                )
+                variant_complex.append(VariantComplex(start_pos=start, end_pos=end, new_sequence=""))
 
         # -- Modified residue -------------------------------------------
         elif ftype == "Modified residue":
@@ -117,40 +153,46 @@ def features_to_annotations(
             if not mod_name:
                 continue
             ptm = ptm_map.get(mod_name)
-            if ptm and ptm.psi_mod:
-                mod_res_psi.append(
-                    ModResPsi(positions=(start,), accession=ptm.psi_mod, name=mod_name)
-                )
-            elif ptm and ptm.unimod is not None:
+            has_mass = ptm is not None and ptm.monoisotopic_mass is not None
+            psi_mod = psi_mod_accession(ptm) if ptm else None
+            unimod_id = unimod_accession(ptm) if ptm else None
+            added = False
+            if ptm and psi_mod and (not only_known_mass or has_mass):
+                mod_res_psi.append(ModResPsi(positions=(start,), accession=psi_mod, name=_psi_name(psi_mod)))
+                added = True
+            if ptm and unimod_id is not None and (not only_known_mass or has_mass):
                 mod_res_unimod.append(
-                    ModResUnimod(positions=(start,), accession=str(ptm.unimod), name=mod_name)
+                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{unimod_id}", name=_unimod_name(unimod_id))
                 )
-            else:
+                added = True
+            if ptm and ptm.proforma_formula is not None:
                 mod_res.append(
-                    ModRes(positions=(start,), accession="", name=mod_name)
+                    ModRes(
+                        positions=(start,),
+                        accession=f"Formula:{''.join(ptm.proforma_formula.split())}",
+                        name=mod_name,
+                    )
                 )
+                added = True
+
+            if not added and not only_known_mass:
+                mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
 
         # -- Glycosylation / Lipidation ---------------------------------
         elif ftype in ("Glycosylation", "Lipidation"):
             mod_name = _clean_mod_name(note) if note else ftype
-            mod_res.append(
-                ModRes(positions=(start,), accession="", name=mod_name)
-            )
+            mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
 
         # -- Cross-link -------------------------------------------------
         elif ftype == "Cross-link":
             mod_name = _clean_mod_name(note) if note else "Cross-link"
             positions = (start, end) if start != end else (start,)
-            mod_res.append(
-                ModRes(positions=positions, accession="", name=mod_name)
-            )
+            mod_res.append(ModRes(positions=positions, accession="", name=mod_name))
 
         # -- Processed features -----------------------------------------
         elif ftype in _PROCESSED_FEATURES:
             acc, name = PROCESSED_ACCESSIONS[ftype]
-            processed.append(
-                Processed(start_pos=start, end_pos=end, accession=acc, name=name)
-            )
+            processed.append(Processed(start_pos=start, end_pos=end, accession=acc, name=name))
 
     return {
         "variant_simple": tuple(sorted(variant_simple, key=lambda v: v.position)),

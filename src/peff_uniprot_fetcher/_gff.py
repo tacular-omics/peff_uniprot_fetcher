@@ -8,27 +8,33 @@ from urllib.parse import unquote
 log = logging.getLogger(__name__)
 
 # Feature types we extract from UniProt GFF.
-VARIANT_TYPES = frozenset({
-    "Natural variant",
-    "Mutagenesis",
-    "Alternative sequence",
-    "Sequence conflict",
-})
+VARIANT_TYPES = frozenset(
+    {
+        "Natural variant",
+        "Mutagenesis",
+        "Alternative sequence",
+        "Sequence conflict",
+    }
+)
 
-MODIFICATION_TYPES = frozenset({
-    "Modified residue",
-    "Glycosylation",
-    "Lipidation",
-    "Cross-link",
-})
+MODIFICATION_TYPES = frozenset(
+    {
+        "Modified residue",
+        "Glycosylation",
+        "Lipidation",
+        "Cross-link",
+    }
+)
 
-PROCESSED_TYPES = frozenset({
-    "Signal peptide",
-    "Transit peptide",
-    "Propeptide",
-    "Chain",
-    "Peptide",
-})
+PROCESSED_TYPES = frozenset(
+    {
+        "Signal peptide",
+        "Transit peptide",
+        "Propeptide",
+        "Chain",
+        "Peptide",
+    }
+)
 
 _ALL_TYPES = VARIANT_TYPES | MODIFICATION_TYPES | PROCESSED_TYPES
 

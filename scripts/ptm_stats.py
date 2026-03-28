@@ -1,22 +1,71 @@
-"""Print statistics on UniProt's ptmlist.txt entries."""
+"""Print statistics on UniProt's ptmlist.txt entries and write subset TSV files."""
 
+import csv
 import sys
 from collections import Counter
+from pathlib import Path
 
-from peff_uniprot_fetcher._ptm import UniProtPtm, get_ptm_map
+from uniprotptmpy import PtmEntry
+
+from peff_uniprot_fetcher._ptm import get_ptm_map, psi_mod_accession, unimod_accession
+
+FIELDS = [
+    "name", "id", "feature_type", "target", "correction_formula",
+    "proforma_formula", "monoisotopic_mass", "average_mass", "psi_mod", "unimod",
+]
 
 
-def stats(ptms: dict[str, UniProtPtm]) -> None:
+def write_tsv(path: Path, entries: list[PtmEntry]) -> None:
+    with path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS, delimiter="\t")
+        w.writeheader()
+        for p in sorted(entries, key=lambda x: x.name):
+            w.writerow({
+                "name": p.name,
+                "id": p.id,
+                "feature_type": p.feature_type,
+                "target": p.target,
+                "correction_formula": p.correction_formula or "",
+                "proforma_formula": p.proforma_formula or "",
+                "monoisotopic_mass": "" if p.monoisotopic_mass is None else p.monoisotopic_mass,
+                "average_mass": "" if p.average_mass is None else p.average_mass,
+                "psi_mod": psi_mod_accession(p) or "",
+                "unimod": unimod_accession(p) or "",
+            })
+    print(f"  {path}  ({len(entries)} entries)")
+
+
+def write_subsets(ptms: dict[str, PtmEntry], out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    entries = list(ptms.values())
+
+    subsets = {
+        "all":          entries,
+        "psimod_only":  [p for p in entries if psi_mod_accession(p) is not None and unimod_accession(p) is None],
+        "unimod_only":  [p for p in entries if unimod_accession(p) is not None and psi_mod_accession(p) is None],
+        "both":         [p for p in entries if psi_mod_accession(p) is not None and unimod_accession(p) is not None],
+        "neither":      [p for p in entries if psi_mod_accession(p) is None and unimod_accession(p) is None],
+        "MOD_RES":      [p for p in entries if p.feature_type == "MOD_RES"],
+        "CARBOHYD":     [p for p in entries if p.feature_type == "CARBOHYD"],
+        "CROSSLNK":     [p for p in entries if p.feature_type == "CROSSLNK"],
+        "LIPID":        [p for p in entries if p.feature_type == "LIPID"],
+    }
+
+    print("Writing TSV files:")
+    for name, subset in subsets.items():
+        write_tsv(out_dir / f"ptm_{name}.tsv", subset)
+
+
+def stats(ptms: dict[str, PtmEntry]) -> None:
     total = len(ptms)
     entries = list(ptms.values())
 
-    has_psimod   = sum(1 for p in entries if p.psi_mod is not None)
-    has_unimod   = sum(1 for p in entries if p.unimod is not None)
-    has_both     = sum(1 for p in entries if p.psi_mod is not None and p.unimod is not None)
-    has_neither  = sum(1 for p in entries if p.psi_mod is None and p.unimod is None)
-    has_mass     = sum(1 for p in entries if p.mono_mass is not None)
-
-    ft_counts    = Counter(p.feature_key for p in entries)
+    has_psimod  = sum(1 for p in entries if psi_mod_accession(p) is not None)
+    has_unimod  = sum(1 for p in entries if unimod_accession(p) is not None)
+    has_both    = sum(1 for p in entries if psi_mod_accession(p) is not None and unimod_accession(p) is not None)
+    has_neither = sum(1 for p in entries if psi_mod_accession(p) is None and unimod_accession(p) is None)
+    has_mass    = sum(1 for p in entries if p.monoisotopic_mass is not None)
+    ft_counts   = Counter(p.feature_type for p in entries)
 
     print(f"Total PTM entries:          {total}")
     print()
@@ -37,8 +86,7 @@ def stats(ptms: dict[str, UniProtPtm]) -> None:
         print(f"  {ft:<20} {count}")
     print()
 
-    # Mass distribution for entries that have masses
-    masses = [p.mono_mass for p in entries if p.mono_mass is not None]
+    masses = [p.monoisotopic_mass for p in entries if p.monoisotopic_mass is not None]
     if masses:
         masses.sort()
         n = len(masses)
@@ -46,22 +94,23 @@ def stats(ptms: dict[str, UniProtPtm]) -> None:
         print(f"  Min:    {masses[0]:.4f}")
         print(f"  Median: {masses[n // 2]:.4f}")
         print(f"  Max:    {masses[-1]:.4f}")
-        positives = sum(1 for m in masses if m > 0)
-        negatives = sum(1 for m in masses if m < 0)
-        print(f"  >0 (additions):  {positives}")
-        print(f"  <0 (removals):   {negatives}")
+        print(f"  >0 (additions):  {sum(1 for m in masses if m > 0)}")
+        print(f"  <0 (removals):   {sum(1 for m in masses if m < 0)}")
+        print()
 
 
 if __name__ == "__main__":
-    if "--help" in sys.argv or "-h" in sys.argv:
-        print("Usage: uv run python scripts/ptm_stats.py")
-        print("Fetches ptmlist.txt from UniProt and prints statistics.")
-        sys.exit(0)
-
+    import argparse
     import logging
+
+    parser = argparse.ArgumentParser(description="Print UniProt PTM list statistics and write subset TSV files.")
+    parser.add_argument("--out-dir", "-o", default="data/ptm", metavar="DIR",
+                        help="Directory to write TSV subsets into (default: data/ptm).")
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
 
-    print("Fetching ptmlist.txt...", file=sys.stderr)
     ptms = get_ptm_map()
     print()
     stats(ptms)
+    write_subsets(ptms, Path(args.out_dir))

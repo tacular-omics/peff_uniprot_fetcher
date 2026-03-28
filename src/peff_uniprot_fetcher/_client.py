@@ -7,7 +7,6 @@ import httpx
 log = logging.getLogger(__name__)
 
 UNIPROT_REST_BASE = "https://rest.uniprot.org/uniprotkb"
-PTMLIST_URL = "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/docs/ptmlist.txt"
 
 
 def fetch_entry(accession: str, fmt: str, timeout: float = 30.0) -> str:
@@ -90,16 +89,3 @@ def stream_search(query: str, fmt: str, timeout: float = 60.0) -> str:
     return response.text
 
 
-def fetch_ptmlist(timeout: float = 60.0) -> str:
-    """Fetch the UniProt PTM/modification list (ptmlist.txt).
-
-    Returns
-    -------
-    str
-        The raw ptmlist.txt content.
-    """
-    log.info("Fetching UniProt PTM list...")
-    response = httpx.get(PTMLIST_URL, timeout=timeout, follow_redirects=True)
-    response.raise_for_status()
-    log.info("PTM list fetched (%d bytes)", len(response.content))
-    return response.text

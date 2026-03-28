@@ -1,120 +1,111 @@
-"""PTM name to UniProt PTM entry mapping."""
+"""PTM name to PtmEntry mapping with ontology enrichment."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import replace
 
-from peff_uniprot_fetcher._client import fetch_ptmlist
+import psimodpy
+import unimodpy
+import uniprotptmpy
+from uniprotptmpy import PtmEntry
 
-_PTM_CACHE: dict[str, UniProtPtm] | None = None
+_PTM_CACHE: dict[str, PtmEntry] | None = None
 
-
-@dataclass(frozen=True)
-class UniProtPtm:
-    """A single entry from UniProt's ptmlist.txt.
-
-    Attributes
-    ----------
-    id:
-        PTM identifier as it appears in GFF ``Note`` fields (e.g. ``"Phosphoserine"``).
-    ac:
-        UniProt internal accession (e.g. ``"PTM-0253"``).
-    feature_key:
-        UniProt feature type: ``MOD_RES``, ``CROSSLNK``, ``LIPID``, ``CARBOHYD``, etc.
-    target:
-        Amino acid target(s) (e.g. ``"Serine"``).
-    mono_mass:
-        Monoisotopic mass difference in Da, or ``None`` if not listed.
-    avg_mass:
-        Average mass difference in Da, or ``None`` if not listed.
-    psi_mod:
-        PSI-MOD accession (e.g. ``"MOD:00046"``), or ``None`` if not cross-referenced.
-    unimod:
-        UniMod accession number (e.g. ``21``), or ``None`` if not cross-referenced.
-    """
-
-    id: str
-    ac: str
-    feature_key: str
-    target: str
-    mono_mass: float | None
-    avg_mass: float | None
-    psi_mod: str | None
-    unimod: int | None
+_psimod_db: psimodpy.PsiModDatabase | None = None
+_unimod_db: unimodpy.UnimodDatabase | None = None
 
 
-def parse_ptmlist(text: str) -> dict[str, UniProtPtm]:
-    """Parse UniProt ptmlist.txt and return ``{ptm_name: UniProtPtm}``.
+def _get_psimod_db() -> psimodpy.PsiModDatabase:
+    global _psimod_db  # noqa: PLW0603
+    if _psimod_db is None:
+        _psimod_db = psimodpy.load()
+    return _psimod_db
 
-    Records are separated by ``//`` lines. Each record has an ``ID`` line
-    and optional cross-reference lines for PSI-MOD and UniMod.
-    """
-    result: dict[str, UniProtPtm] = {}
 
-    current_id: str | None = None
-    current_ac: str = ""
-    current_ft: str = ""
-    current_tg: str = ""
-    current_mm: float | None = None
-    current_ma: float | None = None
-    current_psimod: str | None = None
-    current_unimod: int | None = None
+def _get_unimod_db() -> unimodpy.UnimodDatabase:
+    global _unimod_db  # noqa: PLW0603
+    if _unimod_db is None:
+        _unimod_db = unimodpy.load()
+    return _unimod_db
 
-    for line in text.splitlines():
-        if line.startswith("ID   "):
-            current_id = line[5:].strip()
-        elif line.startswith("AC   "):
-            current_ac = line[5:].strip()
-        elif line.startswith("FT   "):
-            current_ft = line[5:].strip()
-        elif line.startswith("TG   "):
-            current_tg = line[5:].strip().rstrip(".")
-        elif line.startswith("MM   "):
+
+def psi_mod_accession(entry: PtmEntry) -> str | None:
+    """Extract PSI-MOD accession (e.g. ``"MOD:00046"``) from cross-references, or ``None``."""
+    for xref in entry.cross_references:
+        if xref.database == "PSI-MOD":
+            return xref.accession
+    return None
+
+
+def unimod_accession(entry: PtmEntry) -> int | None:
+    """Extract numeric UniMod accession from cross-references, or ``None``."""
+    for xref in entry.cross_references:
+        if xref.database == "Unimod":
             try:
-                current_mm = float(line[5:].strip())
+                return int(xref.accession)
             except ValueError:
                 pass
-        elif line.startswith("MA   "):
+    return None
+
+
+def _enrich_from_ontologies(
+    ptm_map: dict[str, PtmEntry],
+) -> dict[str, PtmEntry]:
+    """Fill correction_formula / monoisotopic_mass / average_mass from unimodpy/psimodpy
+    for entries that have a PSI-MOD or UniMod cross-reference but no mass data from UniProt."""
+    enriched: dict[str, PtmEntry] = {}
+    for name, ptm in ptm_map.items():
+        unimod_id = unimod_accession(ptm)
+        psi_mod_id = psi_mod_accession(ptm)
+
+        if ptm.correction_formula is not None or (unimod_id is None and psi_mod_id is None):
+            enriched[name] = ptm
+            continue
+
+        # Prefer UniMod (more standardised masses), fall back to PSI-MOD
+        formula: str | None = None
+        mono_mass: float | None = None
+        avg_mass: float | None = None
+
+        if unimod_id is not None:
+            info = _get_unimod_db().get_by_id(unimod_id)
+            if info is not None:
+                if info.dict_composition:
+                    formula = " ".join(f"{el}{cnt}" for el, cnt in sorted(info.dict_composition.items()))
+                mono_mass = info.delta_mono_mass
+                avg_mass = info.delta_avge_mass
+
+        if formula is None and mono_mass is None and psi_mod_id is not None:
             try:
-                current_ma = float(line[5:].strip())
-            except ValueError:
-                pass
-        elif line.startswith("DR   PSI-MOD;"):
-            # e.g. "DR   PSI-MOD; MOD:00046."
-            current_psimod = line.split(";")[1].strip().rstrip(".")
-        elif line.startswith("DR   Unimod;"):
-            # e.g. "DR   Unimod; 35."
-            try:
-                current_unimod = int(line.split(";")[1].strip().rstrip("."))
-            except ValueError:
-                pass
-        elif line.strip() == "//":
-            if current_id:
-                result[current_id] = UniProtPtm(
-                    id=current_id,
-                    ac=current_ac,
-                    feature_key=current_ft,
-                    target=current_tg,
-                    mono_mass=current_mm,
-                    avg_mass=current_ma,
-                    psi_mod=current_psimod,
-                    unimod=current_unimod,
-                )
-            current_id = None
-            current_ac = ""
-            current_ft = ""
-            current_tg = ""
-            current_mm = None
-            current_ma = None
-            current_psimod = None
-            current_unimod = None
+                psi_num = int(psi_mod_id.split(":")[1])
+            except (IndexError, ValueError):
+                psi_num = None
+            if psi_num is not None:
+                info = _get_psimod_db().get_by_id(psi_num)
+                if info is not None:
+                    if info.dict_diff_formula:
+                        formula = " ".join(f"{el}{cnt}" for el, cnt in sorted(info.dict_diff_formula.items()))
+                    mono_mass = info.diff_mono
+                    avg_mass = info.diff_avg
 
-    return result
+        if formula is None and mono_mass is None:
+            enriched[name] = ptm
+            continue
+
+        enriched[name] = replace(
+            ptm,
+            correction_formula=formula if formula is not None else ptm.correction_formula,
+            monoisotopic_mass=mono_mass if ptm.monoisotopic_mass is None else ptm.monoisotopic_mass,
+            average_mass=avg_mass if ptm.average_mass is None else ptm.average_mass,
+        )
+    return enriched
 
 
-def get_ptm_map() -> dict[str, UniProtPtm]:
-    """Fetch and return the PTM map, caching after the first call."""
+def get_ptm_map() -> dict[str, PtmEntry]:
+    """Load and return the PTM map, caching after the first call."""
     global _PTM_CACHE  # noqa: PLW0603
     if _PTM_CACHE is None:
-        _PTM_CACHE = parse_ptmlist(fetch_ptmlist())
+        db = uniprotptmpy.load()
+        ptm_map = {entry.name: entry for entry in db}
+        _PTM_CACHE = _enrich_from_ontologies(ptm_map)
     return _PTM_CACHE

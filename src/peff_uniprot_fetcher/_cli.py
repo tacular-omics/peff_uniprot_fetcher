@@ -23,6 +23,16 @@ def _annotation_flags(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Exclude processed form annotations (signal peptides, chains, etc.).",
     )
+    parser.add_argument(
+        "--glycosylation", action="store_true", help="Include glycosylation annotations (default: off)."
+    )
+    parser.add_argument("--lipidation", action="store_true", help="Include lipidation annotations (default: off).")
+    parser.add_argument("--crosslinks", action="store_true", help="Include cross-link annotations (default: off).")
+    parser.add_argument(
+        "--only-known-mass",
+        action="store_true",
+        help="Only include modifications with a known monoisotopic mass.",
+    )
 
 
 def fasta_to_peff_cli() -> None:
@@ -43,6 +53,10 @@ def fasta_to_peff_cli() -> None:
         include_variants=not args.no_variants,
         include_modifications=not args.no_modifications,
         include_processed=not args.no_processed,
+        include_glycosylation=args.glycosylation,
+        include_lipidation=args.lipidation,
+        include_crosslinks=args.crosslinks,
+        only_known_mass=args.only_known_mass,
     )
     logging.info("Done. Written to %s", args.output)
 
@@ -57,17 +71,20 @@ def fetch_peff_cli() -> None:
 
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument(
-        "--organism-id", "-x",
+        "--organism-id",
+        "-x",
         metavar="TAXID",
         help="NCBI taxonomy ID (e.g. 9606 for human). Fetches all reviewed (Swiss-Prot) entries.",
     )
     source.add_argument(
-        "--query", "-q",
+        "--query",
+        "-q",
         metavar="QUERY",
         help="Raw UniProt search query (e.g. 'organism_id:9606 AND reviewed:true').",
     )
     source.add_argument(
-        "--accessions", "-a",
+        "--accessions",
+        "-a",
         nargs="+",
         metavar="ACC",
         help="One or more UniProt accessions (e.g. P12345 Q99999).",
@@ -82,20 +99,27 @@ def fetch_peff_cli() -> None:
     args = parser.parse_args()
     _configure_logging()
 
-    kwargs = dict(
-        include_variants=not args.no_variants,
-        include_modifications=not args.no_modifications,
-        include_processed=not args.no_processed,
-    )
+    def _call(*, query: str | None = None, accessions: list[str] | None = None) -> None:
+        fetch_peff_to_file(
+            output=args.output,
+            query=query,
+            accessions=accessions,
+            include_variants=not args.no_variants,
+            include_modifications=not args.no_modifications,
+            include_processed=not args.no_processed,
+            include_glycosylation=args.glycosylation,
+            include_lipidation=args.lipidation,
+            include_crosslinks=args.crosslinks,
+            only_known_mass=args.only_known_mass,
+        )
 
     if args.organism_id:
         reviewed_clause = "" if args.unreviewed else " AND reviewed:true"
-        query = f"organism_id:{args.organism_id}{reviewed_clause}"
-        fetch_peff_to_file(output=args.output, query=query, **kwargs)
+        _call(query=f"organism_id:{args.organism_id}{reviewed_clause}")
     elif args.query:
-        fetch_peff_to_file(output=args.output, query=args.query, **kwargs)
+        _call(query=args.query)
     else:
-        fetch_peff_to_file(output=args.output, accessions=args.accessions, **kwargs)
+        _call(accessions=args.accessions)
 
     logging.info("Done. Written to %s", args.output)
 
@@ -107,7 +131,8 @@ def download_uniprot_cli() -> None:
         description="Download raw FASTA and/or GFF files from UniProt for inspection.",
     )
     parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         default=".",
         metavar="DIR",
         help="Directory to write files into (default: current directory).",

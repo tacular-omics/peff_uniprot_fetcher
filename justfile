@@ -38,3 +38,11 @@ fetch-ecoli:
 # Convert a locally downloaded E. coli FASTA to PEFF
 fasta-to-peff-ecoli fasta="data/ecoli/uniprot_organism_83333.fasta":
     uv run fasta-to-peff {{fasta}} data/ecoli/ecoli_from_fasta.peff
+
+# Remove build artifacts
+clean:
+    rm -rf dist
+
+# Build the package and check that the .obo data file is included
+build:
+    uv build

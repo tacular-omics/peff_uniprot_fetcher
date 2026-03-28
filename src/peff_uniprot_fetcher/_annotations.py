@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 
+import psimodpy
+import unimodpy
 from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
-from tacular.psimod import PSIMOD_LOOKUP
-from tacular.unimod import UNIMOD_LOOKUP
+from uniprotptmpy import PtmEntry
 
-from peff_uniprot_fetcher._ptm import UniProtPtm
+from peff_uniprot_fetcher._ptm import psi_mod_accession, unimod_accession
 
 VARIANT_PATTERN = re.compile(r"([A-Z]+)\s*->\s*([A-Z]+)")
 DBSNP_PATTERN = re.compile(r"dbSNP:(rs\d+)")
@@ -41,6 +42,23 @@ _MODIFICATION_FEATURES = frozenset(
 
 _PROCESSED_FEATURES = frozenset(PROCESSED_ACCESSIONS)
 
+_psimod_db: psimodpy.PsiModDatabase | None = None
+_unimod_db: unimodpy.UnimodDatabase | None = None
+
+
+def _get_psimod_db() -> psimodpy.PsiModDatabase:
+    global _psimod_db  # noqa: PLW0603
+    if _psimod_db is None:
+        _psimod_db = psimodpy.load()
+    return _psimod_db
+
+
+def _get_unimod_db() -> unimodpy.UnimodDatabase:
+    global _unimod_db  # noqa: PLW0603
+    if _unimod_db is None:
+        _unimod_db = unimodpy.load()
+    return _unimod_db
+
 
 def _clean_mod_name(note: str) -> str:
     """Extract a clean modification name from a GFF Note value.
@@ -67,19 +85,19 @@ def _psi_name(accession: str) -> str:
         num = int(accession.split(":")[1])
     except (IndexError, ValueError):
         return f"M:{accession}"
-    info = PSIMOD_LOOKUP.query_id(num)
+    info = _get_psimod_db().get_by_id(num)
     return f"M:{info.name}" if info is not None else f"M:{accession}"
 
 
 def _unimod_name(accession: int) -> str:
     """Return the UniMod name for *accession* prefixed with ``U:``, or ``U:{accession}`` if not found."""
-    info = UNIMOD_LOOKUP.query_id(accession)
+    info = _get_unimod_db().get_by_id(accession)
     return f"U:{info.name}" if info is not None else f"U:{accession}"
 
 
 def features_to_annotations(
     features: list[dict],
-    ptm_map: dict[str, UniProtPtm],
+    ptm_map: dict[str, PtmEntry],
     *,
     only_known_mass: bool = False,
 ) -> dict:
@@ -90,7 +108,7 @@ def features_to_annotations(
     features:
         List of feature dicts as returned by :func:`_gff.parse_gff`.
     ptm_map:
-        Mapping of PTM name to PSI-MOD accession from :func:`_ptm.parse_ptmlist`.
+        Mapping of PTM name to :class:`~uniprotptmpy.PtmEntry`.
 
     Returns
     -------
@@ -135,21 +153,23 @@ def features_to_annotations(
             if not mod_name:
                 continue
             ptm = ptm_map.get(mod_name)
-            has_mass = ptm is not None and ptm.mono_mass is not None
+            has_mass = ptm is not None and ptm.monoisotopic_mass is not None
+            psi_mod = psi_mod_accession(ptm) if ptm else None
+            unimod_id = unimod_accession(ptm) if ptm else None
             added = False
-            if ptm and ptm.psi_mod and (not only_known_mass or has_mass):
-                mod_res_psi.append(ModResPsi(positions=(start,), accession=ptm.psi_mod, name=_psi_name(ptm.psi_mod)))
+            if ptm and psi_mod and (not only_known_mass or has_mass):
+                mod_res_psi.append(ModResPsi(positions=(start,), accession=psi_mod, name=_psi_name(psi_mod)))
                 added = True
-            if ptm and ptm.unimod is not None and (not only_known_mass or has_mass):
+            if ptm and unimod_id is not None and (not only_known_mass or has_mass):
                 mod_res_unimod.append(
-                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{ptm.unimod}", name=_unimod_name(ptm.unimod))
+                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{unimod_id}", name=_unimod_name(unimod_id))
                 )
                 added = True
             if ptm and ptm.proforma_formula is not None:
                 mod_res.append(
                     ModRes(
                         positions=(start,),
-                        accession=ptm.proforma_formula,
+                        accession=f"Formula:{''.join(ptm.proforma_formula.split())}",
                         name=mod_name,
                     )
                 )

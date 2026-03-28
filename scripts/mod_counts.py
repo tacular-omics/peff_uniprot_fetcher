@@ -7,13 +7,20 @@ from pathlib import Path
 
 from pefftacular import PeffReader
 
-from peff_uniprot_fetcher._ptm import get_ptm_map
+from peff_uniprot_fetcher._ptm import get_ptm_map, psi_mod_accession, unimod_accession
 
 
 def _build_mass_lookups(ptm_map: dict) -> tuple[dict[str, bool], dict[str, bool]]:
     """Return (psi_accession -> has_mass, unimod_accession -> has_mass) dicts."""
-    psi = {v.psi_mod: v.mono_mass is not None for v in ptm_map.values() if v.psi_mod}
-    unimod = {f"UNIMOD:{v.unimod}": v.mono_mass is not None for v in ptm_map.values() if v.unimod is not None}
+    psi = {}
+    unimod = {}
+    for v in ptm_map.values():
+        psi_acc = psi_mod_accession(v)
+        uni_acc = unimod_accession(v)
+        if psi_acc:
+            psi[psi_acc] = v.monoisotopic_mass is not None
+        if uni_acc is not None:
+            unimod[f"UNIMOD:{uni_acc}"] = v.monoisotopic_mass is not None
     return psi, unimod
 
 

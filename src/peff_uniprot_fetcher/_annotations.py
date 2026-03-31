@@ -59,6 +59,14 @@ def _get_unimod_db() -> unimodpy.UnimodDatabase:
         _unimod_db = unimodpy.load()
     return _unimod_db
 
+def get_psimod(id: str) -> psimodpy.PsiModEntry | None:
+    """Get PSI-MOD info for a given accession (e.g. "MOD:00046"), or None if not found."""
+    return _get_psimod_db().get_by_id(id)
+
+def get_unimod(id: int) -> unimodpy.UnimodEntry | None:
+    """Get UniMod info for a given numeric accession (e.g. 35), or None if not found."""
+    return _get_unimod_db().get_by_id(id)
+
 
 def _clean_mod_name(note: str) -> str:
     """Extract a clean modification name from a GFF Note value.
@@ -153,31 +161,38 @@ def features_to_annotations(
             if not mod_name:
                 continue
             ptm = ptm_map.get(mod_name)
-            has_mass = ptm is not None and ptm.monoisotopic_mass is not None
-            psi_mod = psi_mod_accession(ptm) if ptm else None
+            psi_mod_id = psi_mod_accession(ptm) if ptm else None
             unimod_id = unimod_accession(ptm) if ptm else None
-            added = False
-            if ptm and psi_mod and (not only_known_mass or has_mass):
-                mod_res_psi.append(ModResPsi(positions=(start,), accession=psi_mod, name=_psi_name(psi_mod)))
-                added = True
-            if ptm and unimod_id is not None and (not only_known_mass or has_mass):
+            if psi_mod_id:
+                psi_mod = get_psimod(psi_mod_id)
+                if not psi_mod:
+                    continue
+                has_mass = psi_mod.mass_mono is not None
+                if not has_mass and only_known_mass:
+                    continue
+                mod_res_psi.append(ModResPsi(positions=(start,), accession=psi_mod_id, name=psi_mod.name))
+            if unimod_id:
+                unimod = get_unimod(unimod_id)
+                if not unimod:
+                    continue
+                has_mass = unimod.delta_mono_mass is not None
+                if not has_mass and only_known_mass:
+                    continue
                 mod_res_unimod.append(
-                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{unimod_id}", name=_unimod_name(unimod_id))
+                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{unimod_id}", name=unimod.name)
                 )
-                added = True
-            if ptm and ptm.proforma_formula is not None:
+            if ptm:
+                has_mass = ptm.monoisotopic_mass is not None
+                if not has_mass and only_known_mass:
+                    continue
+
                 mod_res.append(
                     ModRes(
                         positions=(start,),
-                        accession=f"Formula:{''.join(ptm.proforma_formula.split())}",
-                        name=mod_name,
+                        accession=ptm.id,
+                        name=ptm.name,
                     )
                 )
-                added = True
-
-            if not added and not only_known_mass:
-                mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
-
         # -- Glycosylation / Lipidation ---------------------------------
         elif ftype in ("Glycosylation", "Lipidation"):
             mod_name = _clean_mod_name(note) if note else ftype

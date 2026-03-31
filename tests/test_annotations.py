@@ -6,14 +6,14 @@ from uniprotptmpy import CrossReference, PtmEntry
 from peff_uniprot_fetcher._annotations import features_to_annotations
 
 
-def _make_ptm(name, psi_mod=None, unimod=None, formula=None):  # noqa: E731
+def _make_ptm(name, psi_mod=None, unimod=None, formula=None, feature_type="MOD_RES", ptm_id=""):  # noqa: E731
     xrefs = []
     if psi_mod:
         xrefs.append(CrossReference("PSI-MOD", psi_mod))
     if unimod is not None:
         xrefs.append(CrossReference("Unimod", str(unimod)))
     return PtmEntry(
-        id="", name=name, feature_type="MOD_RES", target="",
+        id=ptm_id, name=name, feature_type=feature_type, target="",
         amino_acid_position=None, polypeptide_position=None,
         correction_formula=formula, monoisotopic_mass=None, average_mass=None,
         cellular_location=None, taxonomic_ranges=(), keywords=(),
@@ -26,6 +26,12 @@ PTM_MAP = {
     "Phosphothreonine": _make_ptm("Phosphothreonine", psi_mod="MOD:00047"),
     "UnimodOnly": _make_ptm("UnimodOnly", unimod=340),
     "CustomWithFormula": _make_ptm("CustomWithFormula", formula="C1 H2 O2 S1"),
+    "S-palmitoyl cysteine": _make_ptm(
+        "S-palmitoyl cysteine", psi_mod="MOD:00111", feature_type="LIPID", ptm_id="PTM-0206",
+    ),
+    "N-linked (GlcNAc...)": _make_ptm(
+        "N-linked (GlcNAc...)", feature_type="CARBOHYD", ptm_id="PTM-0295",
+    ),
 }
 
 
@@ -252,3 +258,97 @@ def test_empty_features():
     assert result["mod_res_psi"] == ()
     assert result["mod_res"] == ()
     assert result["processed"] == ()
+
+
+# -- Glycosylation / Lipidation resolution ---------------------------------
+
+
+def test_glycosylation_with_ptm_match():
+    """Glycosylation whose raw Note matches a PTM map key gets full resolution."""
+    features = [
+        {
+            "feature": "Glycosylation",
+            "start": 80,
+            "end": 80,
+            "attributes": {"Note": "N-linked (GlcNAc...)"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    assert len(result["mod_res"]) == 1
+    m = result["mod_res"][0]
+    assert m.positions == (80,)
+    assert m.accession == "PTM-0295"
+    assert m.name == "N-linked (GlcNAc...)"
+
+
+def test_glycosylation_no_ptm_match():
+    """Glycosylation with no PTM map match falls back to generic ModRes."""
+    features = [
+        {
+            "feature": "Glycosylation",
+            "start": 90,
+            "end": 90,
+            "attributes": {"Note": "O-linked (Xyl...)"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    assert len(result["mod_res"]) == 1
+    m = result["mod_res"][0]
+    assert m.positions == (90,)
+    assert m.accession == ""
+    assert m.name == "O-linked"
+
+
+def test_lipidation_with_ptm_match():
+    """Lipidation whose cleaned Note matches a PTM map key gets PSI-MOD resolution."""
+    features = [
+        {
+            "feature": "Lipidation",
+            "start": 3,
+            "end": 3,
+            "attributes": {"Note": "S-palmitoyl cysteine"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    # Should resolve via PSI-MOD cross-reference
+    assert len(result["mod_res_psi"]) == 1
+    assert result["mod_res_psi"][0].accession == "MOD:00111"
+    # Should also get generic ModRes with PTM ID
+    assert len(result["mod_res"]) == 1
+    assert result["mod_res"][0].accession == "PTM-0206"
+
+
+def test_lipidation_no_ptm_match():
+    """Lipidation with no PTM map match falls back to generic ModRes."""
+    features = [
+        {
+            "feature": "Lipidation",
+            "start": 2,
+            "end": 2,
+            "attributes": {"Note": "GPI-anchor amidated alanine"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    assert len(result["mod_res"]) == 1
+    m = result["mod_res"][0]
+    assert m.accession == ""
+    assert m.name == "GPI-anchor amidated alanine"
+
+
+# -- Continue bug fix tests -------------------------------------------------
+
+
+def test_mod_res_branches_independent():
+    """PSI-MOD and UniMod branches don't short-circuit each other."""
+    features = [
+        {
+            "feature": "Modified residue",
+            "start": 100,
+            "end": 100,
+            "attributes": {"Note": "Phosphoserine"},
+        }
+    ]
+    result = features_to_annotations(features, PTM_MAP)
+    # Phosphoserine has both PSI-MOD and UniMod xrefs; both should resolve.
+    assert len(result["mod_res_psi"]) == 1
+    assert len(result["mod_res_unimod"]) == 1

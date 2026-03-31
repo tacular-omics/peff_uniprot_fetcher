@@ -86,17 +86,28 @@ fasta_to_peff_file("input.fasta", "output.peff")
 header, entries = fasta_to_peff("input.fasta")
 ```
 
-The Python API exposes the full set of annotation flags. All flags default to the same values as the CLI:
+Annotation behaviour is controlled via an `AnnotationConfig` dataclass, or individual keyword arguments:
+
+```python
+from peff_uniprot_fetcher import AnnotationConfig, fetch_peff_to_file
+
+# Using the config dataclass
+cfg = AnnotationConfig(include_glycosylation=True, only_known_mass=True)
+fetch_peff_to_file("human.peff", query="organism_id:9606 AND reviewed:true", cfg=cfg)
+
+# Or pass flags directly as keyword arguments
+fetch_peff_to_file("human.peff", query="organism_id:9606 AND reviewed:true", include_glycosylation=True)
+```
 
 | Parameter | Default | Effect |
 |---|---|---|
 | `include_variants` | `True` | Include sequence variants |
 | `include_modifications` | `True` | Include PTMs (`ModResPsi`, `ModResUnimod`, `ModRes`) |
 | `include_processed` | `True` | Include processed forms |
-| `include_glycosylation` | `False` | Include glycosylation sites (`ModRes`) |
-| `include_lipidation` | `False` | Include lipidation sites (`ModRes`) |
+| `include_glycosylation` | `False` | Include glycosylation sites (resolved via PTM ontologies when possible) |
+| `include_lipidation` | `False` | Include lipidation sites (resolved via PTM ontologies when possible) |
 | `include_crosslinks` | `False` | Include cross-links (`ModRes`) |
-| `exclusive_mod_lists` | `False` | Place each modification in exactly one list using priority PSI-MOD > UniMod > Custom formula, instead of all applicable lists simultaneously |
+| `only_known_mass` | `False` | Only include modifications with a known monoisotopic mass |
 
 ## PEFF annotations
 
@@ -108,15 +119,17 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 | Alternative sequence (isoform) | `VariantComplex` |
 | Modified residue (PSI-MOD cross-ref) | `ModResPsi` |
 | Modified residue (UniMod cross-ref) | `ModResUnimod` |
-| Modified residue (formula or fallback) | `ModRes` |
-| Glycosylation, Lipidation, Cross-link | `ModRes` |
+| Modified residue (UniProt PTM match) | `ModRes` |
+| Glycosylation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
+| Lipidation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
+| Cross-link | `ModRes` |
 | Signal peptide | `Processed` (`PEFF:0001001`) |
 | Transit peptide | `Processed` (`PEFF:0001002`) |
 | Propeptide | `Processed` (`PEFF:0001003`) |
 | Chain (mature protein) | `Processed` (`PEFF:0001004`) |
 | Peptide | `Processed` (`PEFF:0001005`) |
 
-By default a modified residue with both a PSI-MOD and UniMod cross-reference appears in both `ModResPsi` and `ModResUnimod` simultaneously. Set `exclusive_mod_lists=True` (Python) to assign each residue to exactly one list.
+A modified residue with both a PSI-MOD and UniMod cross-reference appears in both `ModResPsi` and `ModResUnimod` simultaneously. Modifications that cannot be resolved to a known PTM entry are silently skipped.
 
 ### PTM name resolution
 
@@ -132,7 +145,7 @@ PTM entries that have PSI-MOD or UniMod cross-references but lack a formula or m
 uv run python scripts/human_proteome_peff.py [OUTPUT] [--query QUERY] \
     [--include-glycosylation] [--include-lipidation] [--include-crosslinks] \
     [--no-variants] [--no-modifications] [--no-processed] \
-    [--exclusive-mod-lists] [--top-n N]
+    [--only-known-mass] [--top-n N]
 ```
 
 `OUTPUT` defaults to `human_proteome.peff`. The `--include-*` flags opt in to feature types that are off by default; `--no-*` flags turn off features that are on by default.

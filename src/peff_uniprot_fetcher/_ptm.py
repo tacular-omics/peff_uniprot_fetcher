@@ -29,6 +29,16 @@ def _get_unimod_db() -> unimodpy.UnimodDatabase:
     return _unimod_db
 
 
+def get_psimod(id: str) -> psimodpy.PsiModEntry | None:
+    """Get PSI-MOD info for a given accession (e.g. ``"MOD:00046"``), or ``None`` if not found."""
+    return _get_psimod_db().get_by_id(id)
+
+
+def get_unimod(id: int) -> unimodpy.UnimodEntry | None:
+    """Get UniMod info for a given numeric accession (e.g. 35), or ``None`` if not found."""
+    return _get_unimod_db().get_by_id(id)
+
+
 def psi_mod_accession(entry: PtmEntry) -> str | None:
     """Extract PSI-MOD accession (e.g. ``"MOD:00046"``) from cross-references, or ``None``."""
     for xref in entry.cross_references:

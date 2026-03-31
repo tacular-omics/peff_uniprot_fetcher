@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import re
 
-import psimodpy
-import unimodpy
 from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
 from uniprotptmpy import PtmEntry
 
-from peff_uniprot_fetcher._ptm import psi_mod_accession, unimod_accession
+from peff_uniprot_fetcher._ptm import get_psimod, get_unimod, psi_mod_accession, unimod_accession
 
 VARIANT_PATTERN = re.compile(r"([A-Z]+)\s*->\s*([A-Z]+)")
 DBSNP_PATTERN = re.compile(r"dbSNP:(rs\d+)")
@@ -42,31 +40,6 @@ _MODIFICATION_FEATURES = frozenset(
 
 _PROCESSED_FEATURES = frozenset(PROCESSED_ACCESSIONS)
 
-_psimod_db: psimodpy.PsiModDatabase | None = None
-_unimod_db: unimodpy.UnimodDatabase | None = None
-
-
-def _get_psimod_db() -> psimodpy.PsiModDatabase:
-    global _psimod_db  # noqa: PLW0603
-    if _psimod_db is None:
-        _psimod_db = psimodpy.load()
-    return _psimod_db
-
-
-def _get_unimod_db() -> unimodpy.UnimodDatabase:
-    global _unimod_db  # noqa: PLW0603
-    if _unimod_db is None:
-        _unimod_db = unimodpy.load()
-    return _unimod_db
-
-def get_psimod(id: str) -> psimodpy.PsiModEntry | None:
-    """Get PSI-MOD info for a given accession (e.g. "MOD:00046"), or None if not found."""
-    return _get_psimod_db().get_by_id(id)
-
-def get_unimod(id: int) -> unimodpy.UnimodEntry | None:
-    """Get UniMod info for a given numeric accession (e.g. 35), or None if not found."""
-    return _get_unimod_db().get_by_id(id)
-
 
 def _clean_mod_name(note: str) -> str:
     """Extract a clean modification name from a GFF Note value.
@@ -89,18 +62,55 @@ def _clean_mod_name(note: str) -> str:
 
 def _psi_name(accession: str) -> str:
     """Return the PSI-MOD name for *accession* prefixed with ``M:``, or ``M:{accession}`` if not found."""
-    try:
-        num = int(accession.split(":")[1])
-    except (IndexError, ValueError):
-        return f"M:{accession}"
-    info = _get_psimod_db().get_by_id(num)
+    info = get_psimod(accession)
     return f"M:{info.name}" if info is not None else f"M:{accession}"
 
 
 def _unimod_name(accession: int) -> str:
     """Return the UniMod name for *accession* prefixed with ``U:``, or ``U:{accession}`` if not found."""
-    info = _get_unimod_db().get_by_id(accession)
+    info = get_unimod(accession)
     return f"U:{info.name}" if info is not None else f"U:{accession}"
+
+
+def _resolve_modification(
+    mod_name: str,
+    positions: tuple[int, ...],
+    ptm_map: dict[str, PtmEntry],
+    only_known_mass: bool,
+    mod_res_psi: list[ModResPsi],
+    mod_res_unimod: list[ModResUnimod],
+    mod_res: list[ModRes],
+) -> None:
+    """Look up *mod_name* in *ptm_map* and append resolved annotations.
+
+    Each annotation type (PSI-MOD, UniMod, generic ModRes) is resolved
+    independently so a failure in one does not block the others.  When
+    no PTM match is found a generic ``ModRes`` with an empty accession
+    is emitted as a fallback.
+    """
+    ptm = ptm_map.get(mod_name)
+    psi_mod_id = psi_mod_accession(ptm) if ptm else None
+    unimod_id = unimod_accession(ptm) if ptm else None
+
+    if psi_mod_id:
+        psi_mod = get_psimod(psi_mod_id)
+        if psi_mod is not None:
+            if not only_known_mass or psi_mod.mass_mono is not None:
+                mod_res_psi.append(ModResPsi(positions=positions, accession=psi_mod_id, name=_psi_name(psi_mod_id)))
+
+    if unimod_id:
+        unimod = get_unimod(unimod_id)
+        if unimod is not None:
+            if not only_known_mass or unimod.delta_mono_mass is not None:
+                mod_res_unimod.append(
+                    ModResUnimod(positions=positions, accession=f"UNIMOD:{unimod_id}", name=_unimod_name(unimod_id))
+                )
+
+    if ptm:
+        has_mass = ptm.monoisotopic_mass is not None
+        if not has_mass and only_known_mass:
+            return
+        mod_res.append(ModRes(positions=positions, accession=ptm.id, name=ptm.name))
 
 
 def features_to_annotations(
@@ -160,43 +170,19 @@ def features_to_annotations(
             mod_name = _clean_mod_name(note)
             if not mod_name:
                 continue
-            ptm = ptm_map.get(mod_name)
-            psi_mod_id = psi_mod_accession(ptm) if ptm else None
-            unimod_id = unimod_accession(ptm) if ptm else None
-            if psi_mod_id:
-                psi_mod = get_psimod(psi_mod_id)
-                if not psi_mod:
-                    continue
-                has_mass = psi_mod.mass_mono is not None
-                if not has_mass and only_known_mass:
-                    continue
-                mod_res_psi.append(ModResPsi(positions=(start,), accession=psi_mod_id, name=psi_mod.name))
-            if unimod_id:
-                unimod = get_unimod(unimod_id)
-                if not unimod:
-                    continue
-                has_mass = unimod.delta_mono_mass is not None
-                if not has_mass and only_known_mass:
-                    continue
-                mod_res_unimod.append(
-                    ModResUnimod(positions=(start,), accession=f"UNIMOD:{unimod_id}", name=unimod.name)
-                )
-            if ptm:
-                has_mass = ptm.monoisotopic_mass is not None
-                if not has_mass and only_known_mass:
-                    continue
+            _resolve_modification(mod_name, (start,), ptm_map, only_known_mass, mod_res_psi, mod_res_unimod, mod_res)
 
-                mod_res.append(
-                    ModRes(
-                        positions=(start,),
-                        accession=ptm.id,
-                        name=ptm.name,
-                    )
-                )
         # -- Glycosylation / Lipidation ---------------------------------
         elif ftype in ("Glycosylation", "Lipidation"):
             mod_name = _clean_mod_name(note) if note else ftype
-            mod_res.append(ModRes(positions=(start,), accession="", name=mod_name))
+            # Try raw note first (may match PTM names that include parenthesized
+            # detail, e.g. "N-linked (GlcNAc...)"), then fall back to cleaned name.
+            raw_name = note.split(";")[0].strip() if note else ftype
+            ptm = ptm_map.get(raw_name) or ptm_map.get(mod_name)
+            if ptm:
+                _resolve_modification(
+                    ptm.name, (start,), ptm_map, only_known_mass, mod_res_psi, mod_res_unimod, mod_res
+                )
 
         # -- Cross-link -------------------------------------------------
         elif ftype == "Cross-link":

@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from peff_uniprot_fetcher import fasta_to_peff_file, fetch_peff_to_file
+from peff_uniprot_fetcher import AnnotationConfig, fasta_to_peff_file, fetch_peff_to_file
 from peff_uniprot_fetcher._client import fetch_entry, stream_search
 
 
@@ -35,6 +35,18 @@ def _annotation_flags(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _annotation_config(args: argparse.Namespace) -> AnnotationConfig:
+    return AnnotationConfig(
+        include_variants=not args.no_variants,
+        include_modifications=not args.no_modifications,
+        include_processed=not args.no_processed,
+        include_glycosylation=args.glycosylation,
+        include_lipidation=args.lipidation,
+        include_crosslinks=args.crosslinks,
+        only_known_mass=args.only_known_mass,
+    )
+
+
 def fasta_to_peff_cli() -> None:
     """Entry point: fasta-to-peff"""
     parser = argparse.ArgumentParser(
@@ -47,17 +59,7 @@ def fasta_to_peff_cli() -> None:
     args = parser.parse_args()
     _configure_logging()
 
-    fasta_to_peff_file(
-        fasta=args.input,
-        output=args.output,
-        include_variants=not args.no_variants,
-        include_modifications=not args.no_modifications,
-        include_processed=not args.no_processed,
-        include_glycosylation=args.glycosylation,
-        include_lipidation=args.lipidation,
-        include_crosslinks=args.crosslinks,
-        only_known_mass=args.only_known_mass,
-    )
+    fasta_to_peff_file(fasta=args.input, output=args.output, cfg=_annotation_config(args))
     logging.info("Done. Written to %s", args.output)
 
 
@@ -99,19 +101,10 @@ def fetch_peff_cli() -> None:
     args = parser.parse_args()
     _configure_logging()
 
+    cfg = _annotation_config(args)
+
     def _call(*, query: str | None = None, accessions: list[str] | None = None) -> None:
-        fetch_peff_to_file(
-            output=args.output,
-            query=query,
-            accessions=accessions,
-            include_variants=not args.no_variants,
-            include_modifications=not args.no_modifications,
-            include_processed=not args.no_processed,
-            include_glycosylation=args.glycosylation,
-            include_lipidation=args.lipidation,
-            include_crosslinks=args.crosslinks,
-            only_known_mass=args.only_known_mass,
-        )
+        fetch_peff_to_file(output=args.output, query=query, accessions=accessions, cfg=cfg)
 
     if args.organism_id:
         reviewed_clause = "" if args.unreviewed else " AND reviewed:true"

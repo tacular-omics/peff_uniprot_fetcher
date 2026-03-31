@@ -228,7 +228,9 @@ def test_modified_residue_unimod_only():
     assert m.accession == "UNIMOD:340"
     assert m.name == "U:Bromo"
     assert result["mod_res_psi"] == ()
-    assert result["mod_res"] == ()
+    assert len(result["mod_res"]) == 1
+    assert result["mod_res"][0].accession == ""
+    assert result["mod_res"][0].name == "UnimodOnly"
 
 
 def test_modified_residue_custom_with_formula():
@@ -246,7 +248,7 @@ def test_modified_residue_custom_with_formula():
     assert len(result["mod_res"]) == 1
     m = result["mod_res"][0]
     assert isinstance(m, ModRes)
-    assert m.accession == "Formula:CH2O2S"
+    assert m.accession == ""
     assert m.name == "CustomWithFormula"
 
 

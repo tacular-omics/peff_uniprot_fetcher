@@ -141,11 +141,7 @@ def _resolve_modification(
         has_mass = ptm.monoisotopic_mass is not None
         if not has_mass and only_known_mass:
             return
-        accession = ptm.id
-        if not accession and ptm.proforma_formula:
-            accession = f"Formula:{ptm.proforma_formula.replace(' ', '')}"
-        if accession:
-            mod_res.append(ModRes(positions=positions, accession=accession, name=ptm.name))
+        mod_res.append(ModRes(positions=positions, accession=ptm.id, name=ptm.name))
     else:
         mod_res.append(ModRes(positions=positions, accession="", name=mod_name))
 

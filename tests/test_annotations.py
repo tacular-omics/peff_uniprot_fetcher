@@ -105,6 +105,7 @@ def test_modified_residue_with_psi():
 
 
 def test_modified_residue_without_psi():
+    """Unknown modifications that don't match ptm_map produce no annotations."""
     features = [
         {
             "feature": "Modified residue",
@@ -114,11 +115,9 @@ def test_modified_residue_without_psi():
         }
     ]
     result = features_to_annotations(features, PTM_MAP)
-    assert len(result["mod_res"]) == 1
-    m = result["mod_res"][0]
-    assert isinstance(m, ModRes)
-    assert m.accession == ""
-    assert m.name == "SomeUnknownMod"
+    assert result["mod_res"] == ()
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
 
 
 def test_modified_residue_strips_qualifiers():
@@ -284,7 +283,7 @@ def test_glycosylation_with_ptm_match():
 
 
 def test_glycosylation_no_ptm_match():
-    """Glycosylation with no PTM map match falls back to generic ModRes."""
+    """Glycosylation with no PTM map match produces no annotations."""
     features = [
         {
             "feature": "Glycosylation",
@@ -294,11 +293,9 @@ def test_glycosylation_no_ptm_match():
         }
     ]
     result = features_to_annotations(features, PTM_MAP)
-    assert len(result["mod_res"]) == 1
-    m = result["mod_res"][0]
-    assert m.positions == (90,)
-    assert m.accession == ""
-    assert m.name == "O-linked"
+    assert result["mod_res"] == ()
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
 
 
 def test_lipidation_with_ptm_match():
@@ -321,7 +318,7 @@ def test_lipidation_with_ptm_match():
 
 
 def test_lipidation_no_ptm_match():
-    """Lipidation with no PTM map match falls back to generic ModRes."""
+    """Lipidation with no PTM map match produces no annotations."""
     features = [
         {
             "feature": "Lipidation",
@@ -331,10 +328,9 @@ def test_lipidation_no_ptm_match():
         }
     ]
     result = features_to_annotations(features, PTM_MAP)
-    assert len(result["mod_res"]) == 1
-    m = result["mod_res"][0]
-    assert m.accession == ""
-    assert m.name == "GPI-anchor amidated alanine"
+    assert result["mod_res"] == ()
+    assert result["mod_res_psi"] == ()
+    assert result["mod_res_unimod"] == ()
 
 
 # -- Continue bug fix tests -------------------------------------------------

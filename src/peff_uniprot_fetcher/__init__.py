@@ -11,6 +11,7 @@ from pefftacular import FileHeader, SequenceEntry, write_peff
 from peff_uniprot_fetcher._annotations import features_to_annotations
 from peff_uniprot_fetcher._builder import build_entry, build_header
 from peff_uniprot_fetcher._client import fetch_entries, stream_search
+from peff_uniprot_fetcher._config import AnnotationConfig
 from peff_uniprot_fetcher._fasta import UniProtFastaEntry, parse_fasta
 from peff_uniprot_fetcher._gff import parse_gff
 from peff_uniprot_fetcher._ptm import get_ptm_map
@@ -63,15 +64,9 @@ def _fetch_gff_per_accession(accessions: list[str]) -> dict[str, list[dict]]:
 def _build_entries(
     fasta_entries: list[UniProtFastaEntry],
     all_features: dict[str, list[dict]],
-    include_variants: bool,
-    include_modifications: bool,
-    include_glycosylation: bool,
-    include_lipidation: bool,
-    include_crosslinks: bool,
-    include_processed: bool,
-    only_known_mass: bool = False,
+    cfg: AnnotationConfig,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
-    if include_modifications:
+    if cfg.include_modifications:
         ptm_map = get_ptm_map()
         log.info("PTM map loaded (%d entries)", len(ptm_map))
     else:
@@ -93,23 +88,23 @@ def _build_entries(
         filtered: list[dict] = []
         for feat in raw_features:
             ft = feat["feature"]
-            if ft in _VARIANT_TYPES and include_variants:
+            if ft in _VARIANT_TYPES and cfg.include_variants:
                 filtered.append(feat)
-            elif ft == "Modified residue" and include_modifications:
+            elif ft == "Modified residue" and cfg.include_modifications:
                 filtered.append(feat)
-            elif ft == "Glycosylation" and include_glycosylation:
+            elif ft == "Glycosylation" and cfg.include_glycosylation:
                 filtered.append(feat)
-            elif ft == "Lipidation" and include_lipidation:
+            elif ft == "Lipidation" and cfg.include_lipidation:
                 filtered.append(feat)
-            elif ft == "Cross-link" and include_crosslinks:
+            elif ft == "Cross-link" and cfg.include_crosslinks:
                 filtered.append(feat)
-            elif ft in _PROCESSED_TYPES and include_processed:
+            elif ft in _PROCESSED_TYPES and cfg.include_processed:
                 filtered.append(feat)
 
         annotations = features_to_annotations(
             filtered,
             ptm_map,
-            only_known_mass=only_known_mass,
+            only_known_mass=cfg.only_known_mass,
         )
         entries.append(build_entry(fasta_entry, annotations))
 
@@ -120,18 +115,20 @@ def _build_entries(
 def fetch_peff(
     accessions: list[str] | None = None,
     query: str | None = None,
-    include_variants: bool = True,
-    include_modifications: bool = True,
-    include_glycosylation: bool = False,
-    include_lipidation: bool = False,
-    include_crosslinks: bool = False,
-    include_processed: bool = True,
-    only_known_mass: bool = False,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
     """Fetch proteins from UniProt and return ``(header, entries)`` for writing as PEFF.
 
     Either *accessions* or *query* must be provided (not both).
+
+    Annotation behaviour is controlled via *cfg* (:class:`AnnotationConfig`).
+    For convenience, individual flags (e.g. ``include_variants=False``) may be
+    passed as keyword arguments instead; they are forwarded to the
+    :class:`AnnotationConfig` constructor.
     """
+    if cfg is None:
+        cfg = AnnotationConfig(**kwargs)
     if (accessions is None) == (query is None):
         raise ValueError("Provide exactly one of 'accessions' or 'query'.")
 
@@ -148,105 +145,59 @@ def fetch_peff(
         all_features = parse_gff(stream_search(query, fmt="gff"))
         log.info("Parsed GFF annotations for %d accessions", len(all_features))
 
-    return _build_entries(
-        fasta_entries,
-        all_features,
-        include_variants,
-        include_modifications,
-        include_glycosylation,
-        include_lipidation,
-        include_crosslinks,
-        include_processed,
-        only_known_mass,
-    )
+    return _build_entries(fasta_entries, all_features, cfg)
 
 
 def fasta_to_peff(
     fasta: str | Path,
-    include_variants: bool = True,
-    include_modifications: bool = True,
-    include_glycosylation: bool = False,
-    include_lipidation: bool = False,
-    include_crosslinks: bool = False,
-    include_processed: bool = True,
-    only_known_mass: bool = False,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
 ) -> tuple[FileHeader, list[SequenceEntry]]:
     """Read a local UniProt FASTA file and annotate from UniProt, returning ``(header, entries)``.
 
     Sequences come from the local file; GFF annotations are fetched from UniProt per accession.
+    See :func:`fetch_peff` for annotation options.
     """
+    if cfg is None:
+        cfg = AnnotationConfig(**kwargs)
     log.info("Reading FASTA from %s...", fasta)
     fasta_entries = parse_fasta(Path(fasta).read_text())
     log.info("Parsed %d sequences from FASTA", len(fasta_entries))
 
     all_features = _fetch_gff_per_accession([e.accession for e in fasta_entries])
 
-    return _build_entries(
-        fasta_entries,
-        all_features,
-        include_variants,
-        include_modifications,
-        include_glycosylation,
-        include_lipidation,
-        include_crosslinks,
-        include_processed,
-        only_known_mass,
-    )
+    return _build_entries(fasta_entries, all_features, cfg)
 
 
 def fetch_peff_to_file(
     output: str | Path,
     accessions: list[str] | None = None,
     query: str | None = None,
-    include_variants: bool = True,
-    include_modifications: bool = True,
-    include_glycosylation: bool = False,
-    include_lipidation: bool = False,
-    include_crosslinks: bool = False,
-    include_processed: bool = True,
-    only_known_mass: bool = False,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
 ) -> None:
     """Fetch proteins from UniProt and write directly to a PEFF file."""
-    header, entries = fetch_peff(
-        accessions=accessions,
-        query=query,
-        include_variants=include_variants,
-        include_modifications=include_modifications,
-        include_glycosylation=include_glycosylation,
-        include_lipidation=include_lipidation,
-        include_crosslinks=include_crosslinks,
-        include_processed=include_processed,
-        only_known_mass=only_known_mass,
-    )
+    if cfg is None:
+        cfg = AnnotationConfig(**kwargs)
+    header, entries = fetch_peff(accessions=accessions, query=query, cfg=cfg)
     write_peff(header, entries, output)
 
 
 def fasta_to_peff_file(
     fasta: str | Path,
     output: str | Path,
-    include_variants: bool = True,
-    include_modifications: bool = True,
-    include_glycosylation: bool = False,
-    include_lipidation: bool = False,
-    include_crosslinks: bool = False,
-    include_processed: bool = True,
-    only_known_mass: bool = False,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
 ) -> None:
     """Read a local UniProt FASTA file, annotate from UniProt, and write a PEFF file."""
-    header, entries = fasta_to_peff(
-        fasta=fasta,
-        include_variants=include_variants,
-        include_modifications=include_modifications,
-        include_glycosylation=include_glycosylation,
-        include_lipidation=include_lipidation,
-        include_crosslinks=include_crosslinks,
-        include_processed=include_processed,
-        only_known_mass=only_known_mass,
-    )
+    if cfg is None:
+        cfg = AnnotationConfig(**kwargs)
+    header, entries = fasta_to_peff(fasta=fasta, cfg=cfg)
     write_peff(header, entries, output)
 
 
 __all__ = [
+    "AnnotationConfig",
     "FileHeader",
     "SequenceEntry",
     "fasta_to_peff",

@@ -46,3 +46,7 @@ clean:
 # Build the package and check that the .obo data file is included
 build:
     uv build
+
+
+argc:
+    uv run fasta-to-peff --only-known-mass /home/patrick-garrett/Data/Natalie/Histones/fasta/human_and_contaminants_filtered_0_01_protein_argc_irt.fasta p01_argc.peff

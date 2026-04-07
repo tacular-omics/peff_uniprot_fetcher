@@ -19,6 +19,13 @@ It runs the same `peff_uniprot_fetcher` Python package you'd use from the CLI, c
 Only needed if you want the CLI or Python API — skip this if you're using the web app above.
 
 ```bash
+# From PyPI (recommended)
+pip install peff_uniprot_fetcher
+# or, with uv
+uv pip install peff_uniprot_fetcher
+```
+
+```bash
 # From source
 git clone https://github.com/pgarrett-scripps/peff_uniprot_fetcher
 cd peff_uniprot_fetcher

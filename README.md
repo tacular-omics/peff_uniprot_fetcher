@@ -2,7 +2,21 @@
 
 Generate [PEFF](https://www.psidev.info/peff) (PSI Extended FASTA Format) files from the UniProt REST API. Fetches protein sequences and GFF annotations (variants, PTMs, processed forms) and writes them as annotated PEFF using [pefftacular](https://github.com/pgarrett-scripps/pefftacular).
 
+> **Try it in the browser — no install required:** <https://tacular-omics.github.io/peff_uniprot_fetcher/>
+
+## Web app
+
+A static, zero-backend web app is hosted on GitHub Pages. Type an NCBI taxonomy ID (e.g. `83333` for *E. coli* K-12, `9606` for human), click **Generate PEFF**, and the browser fetches the UniProt data, builds an annotated PEFF file, and hands you a download link — all without touching a server.
+
+It runs the same `peff_uniprot_fetcher` Python package you'd use from the CLI, compiled to WebAssembly via [Pyodide](https://pyodide.org) inside a Web Worker. UniProt is called directly from the browser, so the page is fully client-side.
+
+- **Open it:** <https://tacular-omics.github.io/peff_uniprot_fetcher/>
+- **When to use the CLI instead:** large proteomes (human, mouse, plants) pull hundreds of MB of GFF and take several minutes in-tab — use the CLI or Python API below for those. The web app is best for small/medium organisms and quick one-offs.
+- **Source:** the static bundle lives in [`docs/`](docs/) and loads the project wheel via `micropip`; see `docs/worker.js` for the boot sequence.
+
 ## Installation
+
+Only needed if you want the CLI or Python API — skip this if you're using the web app above.
 
 ```bash
 # From source

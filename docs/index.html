@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PEFF UniProt Fetcher</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    h1 { margin-bottom: 0.25rem; }
+    .sub { color: #666; margin-top: 0; }
+    form {
+      display: grid;
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+    label { font-weight: 600; }
+    input[type="number"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+      width: 12rem;
+    }
+    button {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      width: fit-content;
+    }
+    button:disabled { cursor: wait; opacity: 0.6; }
+    #log {
+      background: #111;
+      color: #0f0;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.85rem;
+      padding: 0.75rem;
+      border-radius: 6px;
+      height: 16rem;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .warn {
+      background: #fff3cd;
+      color: #5c4600;
+      padding: 0.6rem 0.8rem;
+      border-left: 4px solid #e0a800;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    a.download {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.6rem 1rem;
+      background: #2563eb;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>PEFF UniProt Fetcher</h1>
+  <p class="sub">
+    Generate a
+    <a href="https://www.psidev.info/peff" target="_blank" rel="noopener">PEFF</a>
+    file for any organism directly in your browser. Runs entirely client-side
+    via <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>
+    &mdash; no server involved.
+  </p>
+
+  <form id="form">
+    <div>
+      <label for="organism">NCBI Taxonomy ID</label><br />
+      <input id="organism" type="number" min="1" value="83333" required />
+      <small>&nbsp;e.g. 83333 (E. coli K-12), 9606 (human), 559292 (yeast)</small>
+    </div>
+    <div>
+      <label>
+        <input id="reviewed" type="checkbox" checked />
+        Reviewed (Swiss-Prot) only
+      </label>
+    </div>
+    <button id="go" type="submit">Generate PEFF</button>
+  </form>
+
+  <div class="warn">
+    <strong>Heads up:</strong> Large proteomes (e.g. human, mouse) can be
+    slow and memory-heavy in a browser tab &mdash; expect several minutes and
+    hundreds of MB of RAM. For big jobs, use the
+    <a href="https://github.com/tacular-omics/peff_uniprot_fetcher"
+       target="_blank" rel="noopener">CLI</a> instead.
+  </div>
+
+  <h3>Log</h3>
+  <div id="log">Idle. Pyodide will load on first run.</div>
+
+  <div id="download-slot"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

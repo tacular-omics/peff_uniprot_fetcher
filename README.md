@@ -154,9 +154,9 @@ A modified residue with both a PSI-MOD and UniMod cross-reference appears in bot
 
 ### PTM name resolution
 
-`ModResPsi` and `ModResUnimod` entries use the **canonical ontology name** from [tacular](https://github.com/pgarrett-scripps/tacular) (PSI-MOD or UniMod) rather than the UniProt ptmlist name. For example, a phosphoserine site is written as `2|MOD:00046|O-phospho-L-serine` instead of `2|MOD:00046|Phosphoserine`.
+`ModResPsi` and `ModResUnimod` entries use the **canonical ontology name** from [psimodpy](https://pypi.org/project/psimodpy/) and [unimodpy](https://pypi.org/project/unimodpy/) rather than the UniProt ptmlist name. For example, a phosphoserine site is written as `2|MOD:00046|O-phospho-L-serine` instead of `2|MOD:00046|Phosphoserine`.
 
-PTM entries that have PSI-MOD or UniMod cross-references but lack a formula or mass in UniProt's ptmlist are automatically enriched with masses and formulas from tacular at load time.
+PTM entries that have PSI-MOD or UniMod cross-references but lack a formula or mass in UniProt's ptmlist (loaded via [uniprotptmpy](https://pypi.org/project/uniprotptmpy/)) are automatically enriched with masses and formulas from the PSI-MOD / UniMod databases at load time.
 
 ## Human proteome script
 

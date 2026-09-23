@@ -1,0 +1,421 @@
+# peff_uniprot_fetcher: full usage guide
+
+> Turn UniProt accessions, taxonomy IDs, search queries, or a local UniProt FASTA into
+> annotated PEFF (PSI Extended FASTA Format) files. Sequences and GFF3 features come from
+> the UniProt REST API; variants, PTMs and processed forms become PEFF annotations;
+> output is written with pefftacular.
+
+This file is self-contained. It describes version 0.1.0 of the package
+(PyPI: `peff_uniprot_fetcher`, import name `peff_uniprot_fetcher`, Python >= 3.12).
+
+## 1. Install
+
+```bash
+pip install peff_uniprot_fetcher
+# or
+uv add peff_uniprot_fetcher
+```
+
+Runtime dependencies: `httpx`, `pefftacular` (PEFF data model + writer), `uniprotptmpy`
+(UniProt ptmlist), `psimodpy` (PSI-MOD), `unimodpy` (UNIMOD). The ontology packages ship
+their data, so PTM resolution needs no download. Fetching proteins always needs network
+access to `https://rest.uniprot.org/uniprotkb`.
+
+No-install option: the browser app at https://tacular-omics.github.io/peff_uniprot_fetcher/
+runs the same package in Pyodide. It takes a taxonomy ID and a reviewed-only checkbox, and
+uses the default annotation settings. Use the CLI or Python API for large proteomes.
+
+## 2. What goes into the PEFF file
+
+For each protein:
+
+| PEFF key | Source |
+|---|---|
+| `>sp:ACC` / `>tr:ACC` | FASTA `db|accession|entry_name` |
+| `\PName`, `\GName`, `\NcbiTaxId`, `\TaxName`, `\SV`, `\PE`, `\Length` | FASTA header (`OS=`, `OX=`, `GN=`, `PE=`, `SV=`) |
+| `\VariantSimple=(pos|AA|tag)` | GFF Natural variant / Mutagenesis / Alternative sequence / Sequence conflict, single residue `X -> Y`; tag is the `dbSNP:rs...` id if present |
+| `\VariantComplex=(start|end|seq|tag)` | same features, multi-residue change; `Missing` gives an empty sequence |
+| `\ModResPsi=(pos|MOD:xxxxx|M:<PSI-MOD name>)` | Modified residue (and, when enabled, glycosylation / lipidation) whose ptmlist entry has a PSI-MOD cross-reference |
+| `\ModResUnimod=(pos|UNIMOD:n|U:<UNIMOD name>)` | same, with a UNIMOD cross-reference |
+| `\ModRes=(pos|PTM-xxxx|<ptmlist name>)` | same, the UniProt ptmlist entry itself |
+| `\ModRes=(pos1,pos2||<name>)` | Cross-link (when enabled), empty accession |
+| `\Processed=(start|end|PEFF:000100n|name)` | Signal peptide (1), Transit peptide (2), Propeptide (3), Chain = "mature protein" (4), Peptide (5) |
+
+One modified residue can appear in all three of `ModResPsi`, `ModResUnimod` and `ModRes`
+at once. A modified residue whose name is not in the UniProt ptmlist is dropped.
+
+The file header has one database block per prefix present: `sp` ->
+`UniProtKB/Swiss-Prot`, `tr` -> `UniProtKB/TrEMBL`, `DbSource=https://www.uniprot.org`,
+`SequenceType=AA`, PEFF version 1.0.
+
+Real output for a one-protein example (Phosphoserine at 2, variant L5P with dbSNP tag,
+a chain 1-26):
+
+```
+# PEFF 1.0
+# //
+# DbName=UniProtKB/Swiss-Prot
+# Prefix=sp
+# DbSource=https://www.uniprot.org
+# NumberOfEntries=1
+# SequenceType=AA
+# //
+>sp:P12345 \Length=26 \PName=Test protein \GName=TST \NcbiTaxId=9606 \TaxName=Homo sapiens \SV=2 \PE=1 \VariantSimple=(5|P|rs123) \ModResUnimod=(2|UNIMOD:21|U:Phospho) \ModResPsi=(2|MOD:00046|M:O-phospho-L-serine) \ModRes=(2|PTM-0253|Phosphoserine) \Processed=(1|26|PEFF:0001004|mature protein)
+MSKSLVAGSRTEQWLLVRQAALSDKL
+```
+
+## 3. Python API
+
+All public names are importable from the top-level package:
+
+```python
+from peff_uniprot_fetcher import (
+    AnnotationConfig,
+    fetch_peff, fetch_peff_to_file,
+    fasta_to_peff, fasta_to_peff_file,
+    FileHeader, SequenceEntry, write_peff,   # re-exported from pefftacular
+)
+```
+
+### fetch_peff
+
+```python
+fetch_peff(
+    accessions: list[str] | None = None,
+    query: str | None = None,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
+) -> tuple[FileHeader, list[SequenceEntry]]
+```
+
+Fetch proteins from UniProt and return `(header, entries)` without writing a file.
+Give exactly one of `accessions` or `query`; otherwise
+`ValueError("Provide exactly one of 'accessions' or 'query'.")`.
+
+- `query`: any UniProtKB query string, e.g. `"organism_id:9606 AND reviewed:true"`. FASTA
+  and GFF are each downloaded with one request to the `/stream` endpoint.
+- `accessions`: list of UniProt accessions. FASTA is downloaded with one `/search`
+  request (`size=500`); GFF is downloaded in batches of `accession:A OR accession:B ...`
+  queries kept under 1800 characters. Accessions that do not match the UniProt accession
+  pattern are skipped for GFF (logged as a warning).
+- `cfg`: an `AnnotationConfig`. If `cfg` is None, `**kwargs` (any `AnnotationConfig`
+  field, e.g. `include_variants=False`) build one. If `cfg` is given, `**kwargs` are
+  ignored.
+
+### fetch_peff_to_file
+
+```python
+fetch_peff_to_file(
+    output: str | Path,
+    accessions: list[str] | None = None,
+    query: str | None = None,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
+) -> None
+```
+
+`fetch_peff` followed by `write_peff(header, entries, output)`.
+
+### fasta_to_peff
+
+```python
+fasta_to_peff(
+    fasta: str | Path,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
+) -> tuple[FileHeader, list[SequenceEntry]]
+```
+
+Read a local UniProt-format FASTA (headers like
+`>sp|P04637|P53_HUMAN Cellular tumor antigen p53 OS=Homo sapiens OX=9606 GN=TP53 PE=1 SV=4`)
+and fetch only the GFF annotations from UniProt, batched by accession as above.
+Sequences in the output are those from the file. Every header must have the
+`>db|accession|name` shape, or parsing raises `ValueError`. Accessions that are not
+UniProt-shaped (e.g. `CON_P00761` contaminants) are kept but get no annotations.
+
+### fasta_to_peff_file
+
+```python
+fasta_to_peff_file(
+    fasta: str | Path,
+    output: str | Path,
+    cfg: AnnotationConfig | None = None,
+    **kwargs: bool,
+) -> None
+```
+
+`fasta_to_peff` followed by `write_peff`.
+
+### AnnotationConfig
+
+```python
+@dataclass(frozen=True, slots=True)
+class AnnotationConfig:
+    include_variants: bool = True        # Natural variant, Mutagenesis, Alternative sequence, Sequence conflict
+    include_modifications: bool = True   # Modified residue -> ModResPsi / ModResUnimod / ModRes
+    include_glycosylation: bool = False  # Glycosylation, resolved via ptmlist when possible
+    include_lipidation: bool = False     # Lipidation, resolved via ptmlist when possible
+    include_crosslinks: bool = False     # Cross-link -> ModRes with empty accession
+    include_processed: bool = True       # Signal/Transit peptide, Propeptide, Chain, Peptide
+    only_known_mass: bool = False        # drop modifications without a known monoisotopic mass
+```
+
+`include_modifications=False` also skips loading the PTM map.
+
+### Re-exports from pefftacular
+
+- `write_peff(header: FileHeader, entries: Iterable[SequenceEntry], dest: str | Path | IO[str]) -> None`:
+  serialise to a path or an open text stream (e.g. `io.StringIO`).
+- `FileHeader(peff_version: str, general_comments: tuple[str, ...] = (), databases: tuple[DatabaseHeader, ...] = ())`
+- `SequenceEntry(prefix, db_unique_id, sequence, ..., pname, gname, ncbi_tax_id, tax_name,
+  length, sv, pe, variant_simple, variant_complex, mod_res_unimod, mod_res_psi, mod_res,
+  processed, ...)`: frozen dataclass; the annotation fields are tuples of pefftacular
+  `VariantSimple`, `VariantComplex`, `ModResUnimod`, `ModResPsi`, `ModRes`, `Processed`.
+  See the pefftacular docs for the full field list and for reading PEFF back
+  (`pefftacular.read_peff`).
+
+### Internal helpers (private, may change)
+
+Useful for offline work or debugging; not in `__all__`.
+
+- `peff_uniprot_fetcher._fasta.parse_fasta(text: str) -> list[UniProtFastaEntry]`;
+  `UniProtFastaEntry(db, accession, entry_name, protein_name, organism, tax_id, gene_name, pe, sv, sequence)`.
+- `peff_uniprot_fetcher._gff.parse_gff(gff_text: str) -> dict[str, list[dict]]`: accession ->
+  list of `{"feature", "start", "end", "attributes"}`; other feature types are dropped.
+- `peff_uniprot_fetcher._annotations.features_to_annotations(features, ptm_map, *, only_known_mass=False) -> dict`:
+  keys `variant_simple`, `variant_complex`, `mod_res_unimod`, `mod_res_psi`, `mod_res`,
+  `processed`, each a sorted tuple.
+- `peff_uniprot_fetcher._ptm.get_ptm_map() -> dict[str, uniprotptmpy.PtmEntry]`: ptmlist
+  entries keyed by name, masses/formulas filled from UNIMOD then PSI-MOD; cached.
+- `peff_uniprot_fetcher._builder.build_entry(fasta_entry, annotations) -> SequenceEntry`,
+  `build_header(entries, db_version=None) -> FileHeader`.
+- `peff_uniprot_fetcher._client.fetch_entry(accession, fmt, timeout=30.0) -> str`,
+  `fetch_entries(accessions, fmt, timeout=30.0) -> str`,
+  `stream_search(query, fmt, timeout=60.0) -> str`; `fmt` is `"fasta"` or `"gff"`.
+- `peff_uniprot_fetcher._web.generate_peff_string(organism_id: int | str, reviewed: bool = True) -> str`:
+  whole PEFF file as a string (used by the browser app).
+
+## 4. Examples
+
+Fetch a few proteins and inspect the annotations:
+
+```python
+from peff_uniprot_fetcher import fetch_peff, write_peff
+
+header, entries = fetch_peff(accessions=["P04637", "P38398"])
+for e in entries:
+    print(e.db_unique_id, e.gname, len(e.sequence),
+          len(e.variant_simple), len(e.mod_res_psi), len(e.processed))
+write_peff(header, entries, "two_proteins.peff")
+```
+
+A reviewed proteome, straight to disk:
+
+```python
+from peff_uniprot_fetcher import fetch_peff_to_file
+
+fetch_peff_to_file("ecoli.peff", query="organism_id:83333 AND reviewed:true")
+```
+
+Sequences only, no annotations:
+
+```python
+fetch_peff_to_file(
+    "seqs.peff",
+    query="organism_id:9606 AND reviewed:true",
+    include_variants=False,
+    include_modifications=False,
+    include_processed=False,
+)
+```
+
+Everything, but only modifications with a known mass:
+
+```python
+from peff_uniprot_fetcher import AnnotationConfig, fasta_to_peff_file
+
+cfg = AnnotationConfig(
+    include_glycosylation=True,
+    include_lipidation=True,
+    include_crosslinks=True,
+    only_known_mass=True,
+)
+fasta_to_peff_file("human.fasta", "human.peff", cfg=cfg)
+```
+
+PEFF as a string (no file):
+
+```python
+import io
+from peff_uniprot_fetcher import fetch_peff, write_peff
+
+header, entries = fetch_peff(query="accession:P04637")
+buf = io.StringIO()
+write_peff(header, entries, buf)
+text = buf.getvalue()
+```
+
+Offline conversion when you already have UniProt FASTA and GFF text (private helpers):
+
+```python
+from peff_uniprot_fetcher import write_peff
+from peff_uniprot_fetcher._annotations import features_to_annotations
+from peff_uniprot_fetcher._builder import build_entry, build_header
+from peff_uniprot_fetcher._fasta import parse_fasta
+from peff_uniprot_fetcher._gff import parse_gff
+from peff_uniprot_fetcher._ptm import get_ptm_map
+
+ptm_map = get_ptm_map()
+features = parse_gff(open("proteins.gff").read())
+entries = [
+    build_entry(f, features_to_annotations(features.get(f.accession, []), ptm_map))
+    for f in parse_fasta(open("proteins.fasta").read())
+]
+write_peff(build_header(entries), entries, "proteins.peff")
+```
+
+Note: this path does not apply `AnnotationConfig` filtering; it emits every supported
+feature type, including glycosylation, lipidation and cross-links.
+
+## 5. Command line
+
+Three console scripts are installed. All log progress to stderr and need network access.
+
+### fetch-peff
+
+```
+usage: fetch-peff [-h] (--organism-id TAXID | --query QUERY |
+                  --accessions ACC [ACC ...]) [--unreviewed] [--no-variants]
+                  [--no-modifications] [--no-processed] [--glycosylation]
+                  [--lipidation] [--crosslinks] [--only-known-mass]
+                  OUTPUT
+
+positional arguments:
+  OUTPUT                Path for the output PEFF file.
+
+options:
+  --organism-id, -x TAXID
+                        NCBI taxonomy ID (e.g. 9606 for human). Fetches all
+                        reviewed (Swiss-Prot) entries.
+  --query, -q QUERY     Raw UniProt search query (e.g. 'organism_id:9606 AND
+                        reviewed:true').
+  --accessions, -a ACC [ACC ...]
+                        One or more UniProt accessions (e.g. P12345 Q99999).
+  --unreviewed          When using --organism-id, include unreviewed (TrEMBL)
+                        entries (default: reviewed only).
+  --no-variants         Exclude sequence variants.
+  --no-modifications    Exclude PTM/modification annotations.
+  --no-processed        Exclude processed form annotations (signal peptides,
+                        chains, etc.).
+  --glycosylation       Include glycosylation annotations (default: off).
+  --lipidation          Include lipidation annotations (default: off).
+  --crosslinks          Include cross-link annotations (default: off).
+  --only-known-mass     Only include modifications with a known monoisotopic
+                        mass.
+```
+
+`--organism-id N` becomes the query `organism_id:N AND reviewed:true`
+(`organism_id:N` with `--unreviewed`). `--query` is passed through unchanged.
+
+```bash
+fetch-peff human.peff --organism-id 9606
+fetch-peff ecoli.peff -x 83333 --glycosylation --lipidation --crosslinks
+fetch-peff kinases.peff --query "organism_id:9606 AND keyword:KW-0418"
+fetch-peff selected.peff --accessions P04637 P38398 O75807
+fetch-peff seqs.peff -x 9606 --no-variants --no-modifications --no-processed
+```
+
+### fasta-to-peff
+
+```
+usage: fasta-to-peff [-h] [--no-variants] [--no-modifications]
+                     [--no-processed] [--glycosylation] [--lipidation]
+                     [--crosslinks] [--only-known-mass]
+                     INPUT OUTPUT
+
+positional arguments:
+  INPUT               Path to input UniProt FASTA file.
+  OUTPUT              Path for the output PEFF file.
+```
+
+Same annotation flags as `fetch-peff`.
+
+```bash
+fasta-to-peff uniprot_human.fasta human.peff --only-known-mass
+```
+
+### download-uniprot
+
+```
+usage: download-uniprot [-h] [--output-dir DIR] (--organism-id TAXID |
+                        --query QUERY | --accession ACC) [--unreviewed]
+                        [--formats FMT [FMT ...]]
+
+options:
+  --output-dir, -o DIR  Directory to write files into (default: current
+                        directory).
+  --organism-id, -x TAXID
+                        NCBI taxonomy ID (e.g. 9606 for human).
+  --query, -q QUERY     Raw UniProt search query.
+  --accession, -a ACC   Single UniProt accession.
+  --unreviewed          When using --organism-id, include unreviewed entries.
+  --formats FMT [FMT ...]
+                        Formats to download: fasta, gff (default: both).
+```
+
+Writes the raw UniProt responses, for inspection or for `fasta-to-peff`:
+`uniprot_organism_<TAXID>.<fmt>`, `uniprot_query.<fmt>` or `<ACC>.<fmt>` in `--output-dir`.
+
+```bash
+download-uniprot --accession P04637
+download-uniprot -x 9606 -o data/human --formats fasta
+```
+
+## 6. How modifications are resolved
+
+1. The GFF `Note` of a Modified residue is cleaned: first `;`-part, trailing
+   `(...)` qualifier removed (e.g. `Phosphoserine; by CK2` -> `Phosphoserine`,
+   `N6-acetyllysine (alternate)` -> `N6-acetyllysine`), unbalanced parentheses removed.
+2. The cleaned name is looked up in the UniProt ptmlist (uniprotptmpy) by exact name.
+3. If the ptmlist entry has a `PSI-MOD` cross-reference found in psimodpy, a
+   `ModResPsi` is added, named `M:<PSI-MOD name>`.
+4. If it has a `Unimod` cross-reference found in unimodpy, a `ModResUnimod` is added,
+   named `U:<UNIMOD name>`.
+5. A `ModRes` with the ptmlist id (`PTM-xxxx`) and name is always added.
+
+With `only_known_mass=True`, each of the three is dropped when its own source has no
+monoisotopic mass (PSI-MOD `mass_mono`, UNIMOD `delta_mono_mass`, ptmlist
+`monoisotopic_mass`). ptmlist entries without mass data are enriched at load time from
+UNIMOD (preferred) or PSI-MOD via their cross-references.
+
+Glycosylation and lipidation try the raw Note first (ptmlist names such as
+`N-linked (GlcNAc...) asparagine` contain parentheses), then the cleaned name. If neither
+matches, the site is dropped. Cross-links are never looked up; they become `ModRes` with
+an empty accession and both positions.
+
+## 7. Gotchas
+
+- Network: every fetch hits rest.uniprot.org. The `/stream` request for a large
+  proteome (human with GFF) is hundreds of MB and takes minutes; the read timeout is
+  60 s per request.
+- `fetch_peff(accessions=...)` requests FASTA with `size=500` from `/search` in one
+  request. For long accession lists, prefer `query=` or write the FASTA yourself
+  (`download-uniprot`) and use `fasta_to_peff`.
+- Passing both `cfg` and keyword flags: the keyword flags are silently ignored.
+- `ModResPsi` / `ModResUnimod` names carry an `M:` / `U:` prefix.
+- Isoform accessions (`P04637-2`) are kept as separate entries, but they fail the
+  accession pattern used for GFF batching, so with `accessions=` or `fasta_to_peff` they
+  get no annotations. The `query=` path keeps whatever GFF UniProt returns for them.
+- Sibling packages are pinned with floors only, so a new major release of pefftacular
+  or an ontology package can change behaviour.
+- Logging: the library uses `logging` (logger names under `peff_uniprot_fetcher`); call
+  `logging.basicConfig(level=logging.INFO)` to see progress from Python.
+
+## 8. Links
+
+- Source: https://github.com/tacular-omics/peff_uniprot_fetcher
+- PyPI: https://pypi.org/project/peff_uniprot_fetcher/
+- Web app: https://tacular-omics.github.io/peff_uniprot_fetcher/
+- pefftacular: https://github.com/tacular-omics/pefftacular
+- PEFF specification: https://www.psidev.info/peff
+- UniProt REST API: https://www.uniprot.org/help/api

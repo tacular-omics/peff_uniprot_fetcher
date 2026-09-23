@@ -1,0 +1,41 @@
+# peff_uniprot_fetcher
+
+> Python package and CLI that turns UniProt accessions, taxonomy IDs, search queries, or a
+> local UniProt FASTA into annotated PEFF (PSI Extended FASTA Format) files, with
+> variants, PTMs (resolved to PSI-MOD / UNIMOD / UniProt ptmlist), and processed forms.
+
+It downloads FASTA and GFF3 from the UniProt REST API, maps GFF features to PEFF
+annotations (`\VariantSimple`, `\VariantComplex`, `\ModResPsi`, `\ModResUnimod`,
+`\ModRes`, `\Processed`) and writes the file with pefftacular. Entry points:
+`fetch_peff` / `fetch_peff_to_file` (from UniProt), `fasta_to_peff` / `fasta_to_peff_file`
+(local FASTA, annotations from UniProt), `AnnotationConfig` (which feature types to
+include), and the CLIs `fetch-peff`, `fasta-to-peff`, `download-uniprot`. Every call
+needs network access to rest.uniprot.org. A no-install browser version runs the same code
+in Pyodide.
+
+`pip install peff_uniprot_fetcher`, then e.g.
+`fetch-peff ecoli.peff --organism-id 83333` or
+`from peff_uniprot_fetcher import fetch_peff; header, entries = fetch_peff(accessions=["P04637"])`.
+
+## Docs
+
+- [Full usage guide for LLMs](https://raw.githubusercontent.com/tacular-omics/peff_uniprot_fetcher/main/llms-full.txt): install, every public function, CLI reference, annotation mapping, examples, gotchas
+- [README](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/README.md): overview, CLI and Python usage, PEFF annotation table
+- [CLAUDE.md](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/CLAUDE.md): developer guide for AI coding agents working in the repo
+- [Web app](https://tacular-omics.github.io/peff_uniprot_fetcher/): generate a PEFF for a taxonomy ID in the browser
+
+## API
+
+- [Public API source (`__init__.py`)](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/src/peff_uniprot_fetcher/__init__.py): `fetch_peff`, `fetch_peff_to_file`, `fasta_to_peff`, `fasta_to_peff_file`
+- [AnnotationConfig](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/src/peff_uniprot_fetcher/_config.py): annotation on/off flags
+- [CLI](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/src/peff_uniprot_fetcher/_cli.py): `fetch-peff`, `fasta-to-peff`, `download-uniprot`
+- [GFF to PEFF mapping](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/src/peff_uniprot_fetcher/_annotations.py)
+
+## Optional
+
+- [PyPI](https://pypi.org/project/peff_uniprot_fetcher/)
+- [GitHub repository](https://github.com/tacular-omics/peff_uniprot_fetcher)
+- [pefftacular](https://github.com/tacular-omics/pefftacular): PEFF models, reader and writer used for output
+- [uniprotptmpy](https://github.com/tacular-omics/uniprotptmpy), [psimodpy](https://github.com/tacular-omics/psimodpy), [unimodpy](https://github.com/tacular-omics/unimodpy): PTM ontologies used to resolve modifications
+- [PEFF specification (HUPO-PSI)](https://www.psidev.info/peff)
+- [UniProt REST API](https://www.uniprot.org/help/api)

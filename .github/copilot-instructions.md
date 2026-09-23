@@ -1,38 +1,16 @@
-## Copilot Instructions
+# Copilot instructions
 
-### VERY IMPORTANT INSTRUCTIONS
+The canonical guide for AI agents in this repo is [`CLAUDE.md`](../CLAUDE.md) at the repo
+root: commands, module layout, public API, conventions and gotchas. Read it first.
 
-USE THE JUSTFILE WHENEVER POSSIBLE. IF THERE IS NOT A JUSTFILE COMMAND CHECK AGAIN... IF THERE IS STILL NOT A FUCKING JUST COMAND... USE UV PACKAGE MANAGER! THIS IS ALREADY INSTALLED AND AVAILABLE. DO NOT, UNDER ANY CIRCUMSTANCES, INSTALL ANY DEPENDENCIES USING NPM, YARN, PIP, GEM, OR ANY OTHER PACKAGE MANAGER. AND NEVER USE PYHTON / PYTEST DIRECTLY!!! ALWAYS USE JUST FOR AVAILABLE COMMANDS AND ONLY FALL BACK TO UV IF THERE IS NO JUST COMMAND AVAILABLE. 
+Key rules:
 
-### Available Tools
-- Use `just` for all project commands. See `just --list` for available commands.
-- Use `uv` for package management and running scripts. See `uv --help` for usage.
-- Use `git` for version control.
-- Use ty for type checking. `uv run ty check src/ tests/` or `just ty`
-- Use pytest for testing. `uv run pytest tests/` or `just test`
-- use ruff for linting and formatting. `uv run ruff check src/ tests/` or `just lint` and `uv run ruff format src/` or `just format`
-
-### Code Style & Philosophy
-
-- **Type everything**: Use comprehensive type hints (NDArray, Literal, Protocol, Self, etc.). Generic types should be specific. Use pyhton 3.12 features where applicable. Match-case statements preferred over if-elif chains for discrete values >= 3. Use list, tuple, set over List, Tuple, Set where possible. Dont use Union or Optional, use | operator.
-- **Immutability**: Prefer frozen dataclasses with `slots=True` and functional transformations over mutation. Though this is not absolute.
-- **Explicit over implicit**: Clear, descriptive names. No magic. If there's a performance trade-off, make it obvious.
-- **Simplicity**: Simple, readable code over clever one-liners. Break complex logic into smaller functions.
-
-Test do not need to be strongly typed but should still use type hints where reasonable. dont worry about exhaustive typing in tests, nor running ruff/ty on tests.
-
-### Documentation
-
-- Concise docstrings - no novels
-- Document the "why" when non-obvious, not the "what"
-- Type hints are documentation - don't repeat them in docstrings. Methods/Function should be able to get by with no/minimal docstrings if types are clear.
-- Use `Raises` section in docstrings for exceptions
-- No placeholder comments like "TODO: implement later" - use `raise NotImplementedError("reason")`
-
-### Response Style
-
-- Get to the point
-- Show code, minimal explanation
-- If I'm wrong, tell me directly
-- Assume I know Python well - no hand-holding
-
+1. Use `just` recipes (`just check` = ruff + ty + pytest), falling back to `uv run`.
+   Never use pip or call `python` / `pytest` outside `uv run`.
+2. Tests must stay offline. Never add a test that calls the UniProt REST API; build
+   FASTA/GFF strings inline instead.
+3. `_client.py` must keep working under Pyodide (the GitHub Pages app in `docs/`):
+   keep `httpx` import-guarded and the fetch path synchronous.
+4. Do not bump the version, tag, or publish. Only the tacular-omics overseer releases.
+5. Python >= 3.12 typing (`X | None`, builtin generics), frozen dataclasses for config,
+   short docstrings, `logging` not `print` in `src/`.

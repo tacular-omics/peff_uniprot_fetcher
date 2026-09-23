@@ -28,6 +28,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
+[project.urls]
+Homepage = "https://tacular-omics.github.io/peff_uniprot_fetcher/"
+Repository = "https://github.com/tacular-omics/peff_uniprot_fetcher"
+Issues = "https://github.com/tacular-omics/peff_uniprot_fetcher/issues"
+Changelog = "https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/HISTORY.md"
+
 [project.scripts]
 fasta-to-peff = "peff_uniprot_fetcher._cli:fasta_to_peff_cli"
 fetch-peff = "peff_uniprot_fetcher._cli:fetch_peff_cli"

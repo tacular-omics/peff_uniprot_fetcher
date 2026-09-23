@@ -47,6 +47,6 @@ clean:
 build:
     uv build
 
-
-argc:
-    uv run fasta-to-peff --only-known-mass /home/patrick-garrett/Data/Natalie/Histones/fasta/human_and_contaminants_filtered_0_01_protein_argc_irt.fasta p01_argc.peff
+# Convert a local FASTA to PEFF, keeping only modifications with a known mass shift
+argc fasta output="p01_argc.peff":
+    uv run fasta-to-peff --only-known-mass {{fasta}} {{output}}

@@ -16,6 +16,9 @@ UNIPROT_REST_BASE = "https://rest.uniprot.org/uniprotkb"
 
 _IS_PYODIDE = sys.platform == "emscripten"
 
+MAX_QUERY_LEN = 1800  # conservative limit below UniProt's ~2000-char query cap
+SEARCH_PAGE_SIZE = 500  # UniProt /search returns at most 500 results per request
+
 if not _IS_PYODIDE:
     import httpx
 
@@ -47,6 +50,33 @@ def _get_text(url: str, params: dict[str, str] | None, timeout: float) -> str:
     return response.text
 
 
+def accession_batches(
+    accessions: list[str],
+    max_query_len: int = MAX_QUERY_LEN,
+    max_size: int = SEARCH_PAGE_SIZE,
+) -> list[list[str]]:
+    """Split *accessions* into batches whose ``accession:X OR ...`` query fits UniProt's limits.
+
+    Each batch has at most *max_size* accessions and a query of at most *max_query_len* characters.
+    """
+    batches: list[list[str]] = []
+    batch: list[str] = []
+    length = 0
+    for acc in accessions:
+        term = f"accession:{acc}"
+        addition = len(term) + (4 if batch else 0)  # " OR " between terms
+        if batch and (length + addition > max_query_len or len(batch) >= max_size):
+            batches.append(batch)
+            batch = [acc]
+            length = len(term)
+        else:
+            batch.append(acc)
+            length += addition
+    if batch:
+        batches.append(batch)
+    return batches
+
+
 def fetch_entry(accession: str, fmt: str, timeout: float = 30.0) -> str:
     """Fetch a single UniProt entry by accession.
 
@@ -72,8 +102,10 @@ def fetch_entry(accession: str, fmt: str, timeout: float = 30.0) -> str:
 def fetch_entries(accessions: list[str], fmt: str, timeout: float = 30.0) -> str:
     """Fetch multiple UniProt entries by accession list.
 
-    Builds a query like ``accession:P12345 OR accession:Q99999`` and hits
-    the ``/uniprotkb/search`` endpoint.
+    Builds queries like ``accession:P12345 OR accession:Q99999`` and hits
+    the ``/uniprotkb/search`` endpoint, one request per batch from
+    :func:`accession_batches` so that neither the query length nor the
+    500-result page size is exceeded.
 
     Parameters
     ----------
@@ -89,11 +121,17 @@ def fetch_entries(accessions: list[str], fmt: str, timeout: float = 30.0) -> str
     str
         The concatenated response text.
     """
-    query = " OR ".join(f"accession:{acc}" for acc in accessions)
     url = f"{UNIPROT_REST_BASE}/search"
-    params = {"query": query, "format": fmt, "size": "500"}
     log.info("Fetching %d accession(s) from UniProt (%s)...", len(accessions), fmt)
-    text = _get_text(url, params, timeout)
+    parts: list[str] = []
+    fetched = 0
+    for batch in accession_batches(accessions):
+        query = " OR ".join(f"accession:{acc}" for acc in batch)
+        params = {"query": query, "format": fmt, "size": str(SEARCH_PAGE_SIZE)}
+        parts.append(_get_text(url, params, timeout))
+        fetched += len(batch)
+        log.debug("Fetched %d / %d accession(s)", fetched, len(accessions))
+    text = "".join(p if p.endswith("\n") or not p else p + "\n" for p in parts)
     log.debug("Received %d bytes", len(text))
     return text
 

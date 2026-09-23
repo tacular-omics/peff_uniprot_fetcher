@@ -8,7 +8,7 @@ abstract: >-
   (natural variants, PTMs, processed forms) and writes them as annotated PEFF
   using pefftacular, with modification mapping backed by psimodpy, unimodpy,
   and uniprotptmpy. It requires Python 3.12 or later.
-version: "0.1.1"
+version: "0.2.0"
 authors:
   - family-names: Garrett
     given-names: Patrick T.

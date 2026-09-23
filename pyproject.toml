@@ -1,6 +1,6 @@
 [project]
 name = "peff_uniprot_fetcher"
-version = "0.1.1"
+version = "0.2.0"
 description = "Fetch UniProt protein data and generate PEFF (PSI Extended FASTA Format) files."
 readme = "README.md"
 requires-python = ">=3.12"

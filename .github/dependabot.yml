@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    # Sibling tacular-omics pins are raised by the overseer (floor plus cap).
+    ignore:
+      - dependency-name: "pefftacular"
+        # 0.x: the cap is on the minor version, so ignore minor bumps too
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "psimodpy"
+        # 0.x: the cap is on the minor version, so ignore minor bumps too
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "unimodpy"
+        # 0.x: the cap is on the minor version, so ignore minor bumps too
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "uniprotptmpy"
+        # 0.x: the cap is on the minor version, so ignore minor bumps too
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]

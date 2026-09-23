@@ -1,9 +1,11 @@
 """Tests for GFF feature to PEFF annotation conversion."""
 
-from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple
+from pefftacular import ModRes, ModResPsi, ModResUnimod, Processed, VariantComplex, VariantSimple, write_peff
 from uniprotptmpy import CrossReference, PtmEntry
 
 from peff_uniprot_fetcher._annotations import features_to_annotations
+from peff_uniprot_fetcher._builder import build_entry, build_header
+from peff_uniprot_fetcher._fasta import UniProtFastaEntry
 
 
 def _make_ptm(name, psi_mod=None, unimod=None, formula=None, feature_type="MOD_RES", ptm_id=""):  # noqa: E731
@@ -114,7 +116,7 @@ def test_modified_residue_with_psi():
     assert isinstance(m, ModResPsi)
     assert m.positions == (200,)
     assert m.accession == "MOD:00046"
-    assert m.name == "M:O-phospho-L-serine"
+    assert m.name == "O-phospho-L-serine"
 
 
 def test_modified_residue_without_psi():
@@ -144,7 +146,7 @@ def test_modified_residue_strips_qualifiers():
     ]
     result = features_to_annotations(features, PTM_MAP)
     assert len(result["mod_res_psi"]) == 1
-    assert result["mod_res_psi"][0].name == "M:O-phospho-L-serine"
+    assert result["mod_res_psi"][0].name == "O-phospho-L-serine"
 
 
 def test_glycosylation():
@@ -238,11 +240,10 @@ def test_modified_residue_unimod_only():
     assert isinstance(m, ModResUnimod)
     assert m.positions == (400,)
     assert m.accession == "UNIMOD:340"
-    assert m.name == "U:Bromo"
+    assert m.name == "Bromo"
     assert result["mod_res_psi"] == ()
-    assert len(result["mod_res"]) == 1
-    assert result["mod_res"][0].accession == ""
-    assert result["mod_res"][0].name == "UnimodOnly"
+    # A UNIMOD entry exists, so no generic ModRes (PEFF 1.0 section 3.3.12).
+    assert result["mod_res"] == ()
 
 
 def test_modified_residue_custom_with_formula():
@@ -325,9 +326,8 @@ def test_lipidation_with_ptm_match():
     # Should resolve via PSI-MOD cross-reference
     assert len(result["mod_res_psi"]) == 1
     assert result["mod_res_psi"][0].accession == "MOD:00111"
-    # Should also get generic ModRes with PTM ID
-    assert len(result["mod_res"]) == 1
-    assert result["mod_res"][0].accession == "PTM-0206"
+    # A PSI-MOD entry exists, so no generic ModRes (PEFF 1.0 section 3.3.12).
+    assert result["mod_res"] == ()
 
 
 def test_lipidation_no_ptm_match():
@@ -363,6 +363,7 @@ def test_mod_res_branches_independent():
     # Phosphoserine has both PSI-MOD and UniMod xrefs; both should resolve.
     assert len(result["mod_res_psi"]) == 1
     assert len(result["mod_res_unimod"]) == 1
+    assert result["mod_res"] == ()
 
 
 def test_only_known_mass_uses_psimod_delta_mass():
@@ -381,3 +382,51 @@ def test_only_known_mass_uses_psimod_delta_mass():
     assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394"]
     result = features_to_annotations(features, ptm_map, only_known_mass=False)
     assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394", "MOD:00862"]
+
+
+def test_mod_res_only_without_cv_entry():
+    """ModRes is written only when the ptmlist entry maps to neither PSI-MOD nor UNIMOD (section 3.3.12)."""
+    ptm_map = {
+        "Phosphoserine": _make_ptm("Phosphoserine", psi_mod="MOD:00046", unimod=21, ptm_id="PTM-0253"),
+        "NoCv": _make_ptm("NoCv", ptm_id="PTM-9999"),
+        "UnknownPsi": _make_ptm("UnknownPsi", psi_mod="MOD:99999", ptm_id="PTM-9998"),
+    }
+    features = [
+        {"feature": "Modified residue", "start": 1, "end": 1, "attributes": {"Note": "Phosphoserine"}},
+        {"feature": "Modified residue", "start": 2, "end": 2, "attributes": {"Note": "NoCv"}},
+        {"feature": "Modified residue", "start": 3, "end": 3, "attributes": {"Note": "UnknownPsi"}},
+    ]
+    result = features_to_annotations(features, ptm_map)
+    assert [(m.positions, m.accession, m.name) for m in result["mod_res"]] == [
+        ((2,), "PTM-9999", "NoCv"),
+        ((3,), "PTM-9998", "UnknownPsi"),
+    ]
+    # only_known_mass dropping a CV entry must not bring back a ModRes for it.
+    result = features_to_annotations(features[:1], ptm_map, only_known_mass=True)
+    assert result["mod_res"] == ()
+
+
+def test_peff_output_matches_spec_examples(tmp_path):
+    """Written headers match the PEFF 1.0 examples: (100|MOD:00046|O-phospho-L-serine), (100|UNIMOD:21|Phospho)."""
+    ptm_map = {"Phosphoserine": _make_ptm("Phosphoserine", psi_mod="MOD:00046", unimod=21, ptm_id="PTM-0253")}
+    features = [{"feature": "Modified residue", "start": 100, "end": 100, "attributes": {"Note": "Phosphoserine"}}]
+    fasta = UniProtFastaEntry(
+        db="sp",
+        accession="P12345",
+        entry_name="TEST_HUMAN",
+        protein_name="Test",
+        organism=None,
+        tax_id=None,
+        gene_name=None,
+        pe=None,
+        sv=None,
+        sequence="S" * 120,
+    )
+    entry = build_entry(fasta, features_to_annotations(features, ptm_map))
+    out = tmp_path / "out.peff"
+    write_peff(build_header([entry]), [entry], out)
+    header = next(line for line in out.read_text().splitlines() if line.startswith(">sp:P12345"))
+    assert r"\ModResPsi=(100|MOD:00046|O-phospho-L-serine)" in header
+    assert r"\ModResUnimod=(100|UNIMOD:21|Phospho)" in header
+    assert r"\ModRes=" not in header
+    assert "M:" not in header and "U:" not in header

@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/peff_uniprot_fetcher)](https://pypi.org/project/peff_uniprot_fetcher/)
 [![License](https://img.shields.io/github/license/tacular-omics/peff_uniprot_fetcher)](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/LICENSE)
 [![Python](https://img.shields.io/pypi/pyversions/peff_uniprot_fetcher)](https://pypi.org/project/peff_uniprot_fetcher/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22927127.svg)](https://doi.org/10.5281/zenodo.22927127)
 
 Turns UniProt accessions, taxonomy IDs, or search queries into annotated [PEFF](https://www.psidev.info/peff) (PSI Extended FASTA Format) files, ready for proteomics search engines that support the format. It fetches sequences and GFF feature data from the UniProt REST API and writes them out as PEFF using [pefftacular](https://github.com/tacular-omics/pefftacular), so variants, PTMs, and processed forms end up as structured annotations instead of something you have to reconstruct from raw UniProt files yourself.
 

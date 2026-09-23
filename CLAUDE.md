@@ -123,11 +123,11 @@ From `peff_uniprot_fetcher.__all__`:
   CI run and install picks the newest `pefftacular` / `psimodpy` / `unimodpy` /
   `uniprotptmpy`. Sibling pins are floors only (`pefftacular` has none). A breaking
   release in any of them breaks this package with no code change here.
-- **`M:` / `U:` name prefixes.** `ModResPsi` names are written `M:<PSI-MOD name>` and
-  `ModResUnimod` names `U:<UNIMOD name>` (e.g. `(2|MOD:00046|M:O-phospho-L-serine)`).
-  Tests assert this. The README example shows the name without the prefix.
-- A modified residue whose cleaned name is not in the ptmlist emits **nothing**
-  (no fallback `ModRes`), despite what the `_resolve_modification` docstring says.
+- **PEFF 1.0 names.** `ModResPsi` / `ModResUnimod` names are the bare ontology `name:`
+  (e.g. `(2|MOD:00046|O-phospho-L-serine)`, `(2|UNIMOD:21|Phospho)`), as spec sections
+  3.3.10/3.3.11 require; tests assert the spec's own examples. A ptmlist `ModRes` is
+  written only when the entry resolves to neither PSI-MOD nor UNIMOD (section 3.3.12).
+- A modified residue whose cleaned name is not in the ptmlist emits **nothing**.
   Cross-links always emit a `ModRes` with an empty accession.
 - Glycosylation / lipidation match the raw Note first (`N-linked (GlcNAc...) asparagine`)
   and then the qualifier-stripped name. `_clean_mod_name` strips a trailing `(...)` and

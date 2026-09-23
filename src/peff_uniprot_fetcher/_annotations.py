@@ -60,18 +60,6 @@ def _clean_mod_name(note: str) -> str:
     return name
 
 
-def _psi_name(accession: str) -> str:
-    """Return the PSI-MOD name for *accession* prefixed with ``M:``, or ``M:{accession}`` if not found."""
-    info = get_psimod(accession)
-    return f"M:{info.name}" if info is not None else f"M:{accession}"
-
-
-def _unimod_name(accession: int) -> str:
-    """Return the UniMod name for *accession* prefixed with ``U:``, or ``U:{accession}`` if not found."""
-    info = get_unimod(accession)
-    return f"U:{info.name}" if info is not None else f"U:{accession}"
-
-
 def _resolve_modification(
     mod_name: str,
     positions: tuple[int, ...],
@@ -83,34 +71,34 @@ def _resolve_modification(
 ) -> None:
     """Look up *mod_name* in *ptm_map* and append resolved annotations.
 
-    Each annotation type (PSI-MOD, UniMod, generic ModRes) is resolved
-    independently so a failure in one does not block the others.  When
-    no PTM match is found a generic ``ModRes`` with an empty accession
-    is emitted as a fallback.
+    PSI-MOD and UNIMOD are resolved independently, each named with the
+    ontology's own ``name:`` as PEFF 1.0 (sections 3.3.10/3.3.11) requires.
+    A generic ``ModRes`` with the ptmlist id is written only when the entry
+    maps to neither ontology (section 3.3.12).  Names not in *ptm_map*
+    produce nothing.
     """
     ptm = ptm_map.get(mod_name)
-    psi_mod_id = psi_mod_accession(ptm) if ptm else None
-    unimod_id = unimod_accession(ptm) if ptm else None
+    if ptm is None:
+        return
 
-    if psi_mod_id:
-        psi_mod = get_psimod(psi_mod_id)
-        if psi_mod is not None:
-            if not only_known_mass or psi_mod.diff_mono is not None:
-                mod_res_psi.append(ModResPsi(positions=positions, accession=psi_mod_id, name=_psi_name(psi_mod_id)))
+    psi_mod_id = psi_mod_accession(ptm)
+    unimod_id = unimod_accession(ptm)
+    psi_mod = get_psimod(psi_mod_id) if psi_mod_id else None
+    unimod = get_unimod(unimod_id) if unimod_id else None
 
-    if unimod_id:
-        unimod = get_unimod(unimod_id)
-        if unimod is not None:
-            if not only_known_mass or unimod.delta_mono_mass is not None:
-                mod_res_unimod.append(
-                    ModResUnimod(positions=positions, accession=f"UNIMOD:{unimod_id}", name=_unimod_name(unimod_id))
-                )
+    if psi_mod_id and psi_mod is not None:
+        if not only_known_mass or psi_mod.diff_mono is not None:
+            mod_res_psi.append(ModResPsi(positions=positions, accession=psi_mod_id, name=psi_mod.name))
 
-    if ptm:
-        has_mass = ptm.monoisotopic_mass is not None
-        if not has_mass and only_known_mass:
-            return
-        mod_res.append(ModRes(positions=positions, accession=ptm.id, name=ptm.name))
+    if unimod_id and unimod is not None:
+        if not only_known_mass or unimod.delta_mono_mass is not None:
+            mod_res_unimod.append(ModResUnimod(positions=positions, accession=f"UNIMOD:{unimod_id}", name=unimod.name))
+
+    if psi_mod is not None or unimod is not None:
+        return
+    if only_known_mass and ptm.monoisotopic_mass is None:
+        return
+    mod_res.append(ModRes(positions=positions, accession=ptm.id, name=ptm.name))
 
 
 def features_to_annotations(

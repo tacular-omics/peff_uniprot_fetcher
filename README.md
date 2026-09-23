@@ -157,7 +157,7 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 | Alternative sequence (isoform) | `VariantComplex` |
 | Modified residue (PSI-MOD cross-ref) | `ModResPsi` |
 | Modified residue (UniMod cross-ref) | `ModResUnimod` |
-| Modified residue (UniProt PTM match) | `ModRes` |
+| Modified residue (UniProt PTM match, no PSI-MOD/UniMod cross-ref) | `ModRes` |
 | Glycosylation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
 | Lipidation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
 | Cross-link | `ModRes` |

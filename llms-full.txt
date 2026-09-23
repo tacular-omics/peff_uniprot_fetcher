@@ -35,9 +35,9 @@ For each protein:
 | `\PName`, `\GName`, `\NcbiTaxId`, `\TaxName`, `\SV`, `\PE`, `\Length` | FASTA header (`OS=`, `OX=`, `GN=`, `PE=`, `SV=`) |
 | `\VariantSimple=(pos|AA|tag)` | GFF Natural variant / Mutagenesis / Alternative sequence / Sequence conflict, single residue `X -> Y`; tag is the `dbSNP:rs...` id if present |
 | `\VariantComplex=(start|end|seq|tag)` | same features, multi-residue change; `Missing` gives an empty sequence |
-| `\ModResPsi=(pos|MOD:xxxxx|M:<PSI-MOD name>)` | Modified residue (and, when enabled, glycosylation / lipidation) whose ptmlist entry has a PSI-MOD cross-reference |
-| `\ModResUnimod=(pos|UNIMOD:n|U:<UNIMOD name>)` | same, with a UNIMOD cross-reference |
-| `\ModRes=(pos|PTM-xxxx|<ptmlist name>)` | same, the UniProt ptmlist entry itself |
+| `\ModResPsi=(pos|MOD:xxxxx|<PSI-MOD name>)` | Modified residue (and, when enabled, glycosylation / lipidation) whose ptmlist entry has a PSI-MOD cross-reference |
+| `\ModResUnimod=(pos|UNIMOD:n|<UNIMOD name>)` | same, with a UNIMOD cross-reference |
+| `\ModRes=(pos|PTM-xxxx|<ptmlist name>)` | same, only when the ptmlist entry maps to neither PSI-MOD nor UNIMOD |
 | `\ModRes=(pos1,pos2||<name>)` | Cross-link (when enabled), empty accession |
 | `\Processed=(start|end|PEFF:000100n|name)` | Signal peptide (1), Transit peptide (2), Propeptide (3), Chain = "mature protein" (4), Peptide (5) |
 
@@ -60,7 +60,7 @@ a chain 1-26):
 # NumberOfEntries=1
 # SequenceType=AA
 # //
->sp:P12345 \Length=26 \PName=Test protein \GName=TST \NcbiTaxId=9606 \TaxName=Homo sapiens \SV=2 \PE=1 \VariantSimple=(5|P|rs123) \ModResUnimod=(2|UNIMOD:21|U:Phospho) \ModResPsi=(2|MOD:00046|M:O-phospho-L-serine) \ModRes=(2|PTM-0253|Phosphoserine) \Processed=(1|26|PEFF:0001004|mature protein)
+>sp:P12345 \Length=26 \PName=Test protein \GName=TST \NcbiTaxId=9606 \TaxName=Homo sapiens \SV=2 \PE=1 \VariantSimple=(5|P|rs123) \ModResUnimod=(2|UNIMOD:21|Phospho) \ModResPsi=(2|MOD:00046|O-phospho-L-serine) \Processed=(1|26|PEFF:0001004|mature protein)
 MSKSLVAGSRTEQWLLVRQAALSDKL
 ```
 
@@ -379,10 +379,11 @@ download-uniprot -x 9606 -o data/human --formats fasta
    `N6-acetyllysine (alternate)` -> `N6-acetyllysine`), unbalanced parentheses removed.
 2. The cleaned name is looked up in the UniProt ptmlist (uniprotptmpy) by exact name.
 3. If the ptmlist entry has a `PSI-MOD` cross-reference found in psimodpy, a
-   `ModResPsi` is added, named `M:<PSI-MOD name>`.
+   `ModResPsi` is added, named with the PSI-MOD `name:` (no prefix).
 4. If it has a `Unimod` cross-reference found in unimodpy, a `ModResUnimod` is added,
-   named `U:<UNIMOD name>`.
-5. A `ModRes` with the ptmlist id (`PTM-xxxx`) and name is always added.
+   named with the UNIMOD name (no prefix).
+5. A `ModRes` with the ptmlist id (`PTM-xxxx`) and name is added only if neither
+   ontology lookup succeeded (PEFF 1.0 section 3.3.12).
 
 With `only_known_mass=True`, each of the three is dropped when its own source has no
 monoisotopic mass shift (PSI-MOD `diff_mono`, UNIMOD `delta_mono_mass`, ptmlist
@@ -402,7 +403,6 @@ an empty accession and both positions.
 - `fetch_peff(accessions=...)` makes one `/search` request per batch of accessions, so
   long lists mean many requests. For whole proteomes, prefer `query=`.
 - Passing both `cfg` and keyword flags: the keyword flags are silently ignored.
-- `ModResPsi` / `ModResUnimod` names carry an `M:` / `U:` prefix.
 - Isoform accessions (`P04637-2`) are kept as separate entries and are queried, but
   UniProt publishes GFF features only for canonical sequences, so isoforms get no
   annotations; a warning names them.

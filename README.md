@@ -1,8 +1,21 @@
 # peff_uniprot_fetcher
 
-Generate [PEFF](https://www.psidev.info/peff) (PSI Extended FASTA Format) files from the UniProt REST API. Fetches protein sequences and GFF annotations (variants, PTMs, processed forms) and writes them as annotated PEFF using [pefftacular](https://github.com/pgarrett-scripps/pefftacular).
+[![Python Package](https://github.com/tacular-omics/peff_uniprot_fetcher/actions/workflows/python-package.yml/badge.svg)](https://github.com/tacular-omics/peff_uniprot_fetcher/actions/workflows/python-package.yml)
+[![PyPI](https://img.shields.io/pypi/v/peff_uniprot_fetcher)](https://pypi.org/project/peff_uniprot_fetcher/)
+[![License](https://img.shields.io/github/license/tacular-omics/peff_uniprot_fetcher)](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/peff_uniprot_fetcher)](https://pypi.org/project/peff_uniprot_fetcher/)
+
+Turns UniProt accessions, taxonomy IDs, or search queries into annotated [PEFF](https://www.psidev.info/peff) (PSI Extended FASTA Format) files, ready for proteomics search engines that support the format. It fetches sequences and GFF feature data from the UniProt REST API and writes them out as PEFF using [pefftacular](https://github.com/tacular-omics/pefftacular), so variants, PTMs, and processed forms end up as structured annotations instead of something you have to reconstruct from raw UniProt files yourself.
 
 > **Try it in the browser — no install required:** <https://tacular-omics.github.io/peff_uniprot_fetcher/>
+
+## Highlights
+
+- **No install needed to try it** — a browser-based web app (below) generates PEFF files entirely client-side.
+- **Fetch by taxonomy ID, accession list, or a raw UniProt query** — whatever fits your workflow.
+- **Annotations resolved to real ontology entries**, not raw UniProt text — PTMs are matched against [psimodpy](https://pypi.org/project/psimodpy/), [unimodpy](https://pypi.org/project/unimodpy/), and [uniprotptmpy](https://pypi.org/project/uniprotptmpy/) for canonical names and masses.
+- **CLI, Python API, or local FASTA conversion** — fetch straight from UniProt, or annotate a FASTA file you already have.
+- **Selective annotations** — turn variants, modifications, or processed forms on or off, including opt-in glycosylation, lipidation, and cross-link support.
 
 ## Web app
 
@@ -12,7 +25,7 @@ It runs the same `peff_uniprot_fetcher` Python package you'd use from the CLI, c
 
 - **Open it:** <https://tacular-omics.github.io/peff_uniprot_fetcher/>
 - **When to use the CLI instead:** large proteomes (human, mouse, plants) pull hundreds of MB of GFF and take several minutes in-tab — use the CLI or Python API below for those. The web app is best for small/medium organisms and quick one-offs.
-- **Source:** the static bundle lives in [`docs/`](docs/) and loads the project wheel via `micropip`; see `docs/worker.js` for the boot sequence.
+- **Source:** the static bundle lives in [`docs/`](https://github.com/tacular-omics/peff_uniprot_fetcher/tree/main/docs) and loads the project wheel via `micropip`; see `docs/worker.js` for the boot sequence.
 
 ## Installation
 
@@ -27,7 +40,7 @@ uv pip install peff_uniprot_fetcher
 
 ```bash
 # From source
-git clone https://github.com/pgarrett-scripps/peff_uniprot_fetcher
+git clone https://github.com/tacular-omics/peff_uniprot_fetcher
 cd peff_uniprot_fetcher
 just install
 ```
@@ -187,3 +200,7 @@ just format    # ruff format
 just check     # lint + type check + test
 just test      # pytest
 ```
+
+## License
+
+[MIT](https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/LICENSE)

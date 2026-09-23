@@ -101,6 +101,10 @@ All `fetch-peff` and `fasta-to-peff` commands accept:
 | `--no-variants` | variants on | Exclude sequence variants (`VariantSimple`, `VariantComplex`) |
 | `--no-modifications` | modifications on | Exclude PTMs (`ModResPsi`, `ModResUnimod`, `ModRes`) |
 | `--no-processed` | processed on | Exclude processed forms (`Signal peptide`, `Chain`, etc.) |
+| `--glycosylation` | off | Include glycosylation annotations |
+| `--lipidation` | off | Include lipidation annotations |
+| `--crosslinks` | off | Include cross-link annotations |
+| `--only-known-mass` | off | Only include modifications with a known monoisotopic mass |
 
 ## Python API
 

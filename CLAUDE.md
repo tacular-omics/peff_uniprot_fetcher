@@ -24,7 +24,7 @@ just install          # uv sync (creates .venv + uv.lock; uv.lock is gitignored)
 just lint             # ruff check src
 just format           # ruff isort fix + ruff format src (modifies files)
 just ty               # ty check src
-just test             # pytest tests (45 tests, offline, <1 s)
+just test             # pytest tests (52 tests, offline, <1 s)
 just check            # lint + ty + test
 just build            # uv build
 just clean            # rm -rf dist
@@ -77,9 +77,10 @@ features per `AnnotationConfig`, calls `features_to_annotations` with `get_ptm_m
 then `build_entry` per protein and `build_header`; `write_peff` (pefftacular) serialises.
 
 - `fetch_peff(query=...)`: FASTA and GFF each via one `/stream` call.
-- `fetch_peff(accessions=...)`: FASTA via one `/search` call (`size=500`); GFF via
-  `_fetch_gff_per_accession`, which drops non-UniProt accessions (regex) and batches
-  `accession:X OR ...` queries under 1800 characters.
+- `fetch_peff(accessions=...)`: FASTA via `/search` (`fetch_entries`), GFF via
+  `_fetch_gff_per_accession`, which drops non-UniProt accessions (regex, warns with
+  examples). Both batch `accession:X OR ...` queries with `_client.accession_batches`
+  (under 1800 characters and at most 500 accessions per request).
 - `fasta_to_peff(path)`: sequences from the file, GFF batched per accession as above.
 
 ## Public API
@@ -131,8 +132,9 @@ From `peff_uniprot_fetcher.__all__`:
 - Glycosylation / lipidation match the raw Note first (`N-linked (GlcNAc...) asparagine`)
   and then the qualifier-stripped name. `_clean_mod_name` strips a trailing `(...)` and
   removes unbalanced parens because PEFF uses `(...)` as delimiters.
-- `_UNIPROT_ACCESSION_RE` rejects isoform accessions (`P04637-2`), so isoforms in
-  `accessions=` / `fasta_to_peff` input get no GFF annotations. `parse_fasta` raises
+- `_UNIPROT_ACCESSION_RE` accepts isoform accessions (`P04637-2`) and they are queried,
+  but UniProt returns no GFF features for non-canonical isoforms, so they get no
+  annotations (a warning names them). `parse_fasta` raises
   `ValueError` on any header without two `|`.
 - `parse_gff` splits attributes on `;` only at parenthesis depth 0, after URL-decoding.
 - `get_ptm_map()` and the psimod/unimod databases are cached in module globals; the first
@@ -145,7 +147,7 @@ From `peff_uniprot_fetcher.__all__`:
   and the filename in `worker.js` updated.
 - Large proteomes (human with GFF) are hundreds of MB and several minutes; the
   `/stream` call is one request with a 60 s timeout.
-- `just argc` is a personal recipe with a hard-coded local path; ignore it.
+- `just argc FASTA [OUT]` runs `fasta-to-peff --only-known-mass` on a local FASTA (network).
 
 ## Releasing
 

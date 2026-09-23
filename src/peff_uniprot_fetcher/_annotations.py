@@ -95,7 +95,7 @@ def _resolve_modification(
     if psi_mod_id:
         psi_mod = get_psimod(psi_mod_id)
         if psi_mod is not None:
-            if not only_known_mass or psi_mod.mass_mono is not None:
+            if not only_known_mass or psi_mod.diff_mono is not None:
                 mod_res_psi.append(ModResPsi(positions=positions, accession=psi_mod_id, name=_psi_name(psi_mod_id)))
 
     if unimod_id:

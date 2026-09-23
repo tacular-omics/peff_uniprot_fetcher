@@ -13,10 +13,18 @@ def _make_ptm(name, psi_mod=None, unimod=None, formula=None, feature_type="MOD_R
     if unimod is not None:
         xrefs.append(CrossReference("Unimod", str(unimod)))
     return PtmEntry(
-        id=ptm_id, name=name, feature_type=feature_type, target="",
-        amino_acid_position=None, polypeptide_position=None,
-        correction_formula=formula, monoisotopic_mass=None, average_mass=None,
-        cellular_location=None, taxonomic_ranges=(), keywords=(),
+        id=ptm_id,
+        name=name,
+        feature_type=feature_type,
+        target="",
+        amino_acid_position=None,
+        polypeptide_position=None,
+        correction_formula=formula,
+        monoisotopic_mass=None,
+        average_mass=None,
+        cellular_location=None,
+        taxonomic_ranges=(),
+        keywords=(),
         cross_references=tuple(xrefs),
     )
 
@@ -27,10 +35,15 @@ PTM_MAP = {
     "UnimodOnly": _make_ptm("UnimodOnly", unimod=340),
     "CustomWithFormula": _make_ptm("CustomWithFormula", formula="C1 H2 O2 S1"),
     "S-palmitoyl cysteine": _make_ptm(
-        "S-palmitoyl cysteine", psi_mod="MOD:00111", feature_type="LIPID", ptm_id="PTM-0206",
+        "S-palmitoyl cysteine",
+        psi_mod="MOD:00111",
+        feature_type="LIPID",
+        ptm_id="PTM-0206",
     ),
     "N-linked (GlcNAc...)": _make_ptm(
-        "N-linked (GlcNAc...)", feature_type="CARBOHYD", ptm_id="PTM-0295",
+        "N-linked (GlcNAc...)",
+        feature_type="CARBOHYD",
+        ptm_id="PTM-0295",
     ),
 }
 
@@ -350,3 +363,21 @@ def test_mod_res_branches_independent():
     # Phosphoserine has both PSI-MOD and UniMod xrefs; both should resolve.
     assert len(result["mod_res_psi"]) == 1
     assert len(result["mod_res_unimod"]) == 1
+
+
+def test_only_known_mass_uses_psimod_delta_mass():
+    # MOD:00394 (monoacetylated residue) has a delta mass but no full residue mass;
+    # MOD:00862 (D-alanine) has a full residue mass but no delta mass. only_known_mass
+    # must judge PSI-MOD by its delta mass, like UNIMOD.
+    ptm_map = {
+        "DeltaOnly": _make_ptm("DeltaOnly", psi_mod="MOD:00394"),
+        "FullOnly": _make_ptm("FullOnly", psi_mod="MOD:00862"),
+    }
+    features = [
+        {"feature": "Modified residue", "start": 1, "end": 1, "attributes": {"Note": "DeltaOnly"}},
+        {"feature": "Modified residue", "start": 2, "end": 2, "attributes": {"Note": "FullOnly"}},
+    ]
+    result = features_to_annotations(features, ptm_map, only_known_mass=True)
+    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394"]
+    result = features_to_annotations(features, ptm_map, only_known_mass=False)
+    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394", "MOD:00862"]

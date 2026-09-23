@@ -94,10 +94,11 @@ Give exactly one of `accessions` or `query`; otherwise
 
 - `query`: any UniProtKB query string, e.g. `"organism_id:9606 AND reviewed:true"`. FASTA
   and GFF are each downloaded with one request to the `/stream` endpoint.
-- `accessions`: list of UniProt accessions. FASTA is downloaded with one `/search`
-  request (`size=500`); GFF is downloaded in batches of `accession:A OR accession:B ...`
-  queries kept under 1800 characters. Accessions that do not match the UniProt accession
-  pattern are skipped for GFF (logged as a warning).
+- `accessions`: list of UniProt accessions (isoforms such as `P04637-2` allowed). FASTA
+  (`/search`) and GFF (`/stream`) are downloaded in batches of
+  `accession:A OR accession:B ...` queries kept under 1800 characters and 500
+  accessions. Accessions that do not match the UniProt accession pattern are skipped for
+  GFF (logged as a warning that names them).
 - `cfg`: an `AnnotationConfig`. If `cfg` is None, `**kwargs` (any `AnnotationConfig`
   field, e.g. `include_variants=False`) build one. If `cfg` is given, `**kwargs` are
   ignored.
@@ -384,7 +385,7 @@ download-uniprot -x 9606 -o data/human --formats fasta
 5. A `ModRes` with the ptmlist id (`PTM-xxxx`) and name is always added.
 
 With `only_known_mass=True`, each of the three is dropped when its own source has no
-monoisotopic mass (PSI-MOD `mass_mono`, UNIMOD `delta_mono_mass`, ptmlist
+monoisotopic mass shift (PSI-MOD `diff_mono`, UNIMOD `delta_mono_mass`, ptmlist
 `monoisotopic_mass`). ptmlist entries without mass data are enriched at load time from
 UNIMOD (preferred) or PSI-MOD via their cross-references.
 
@@ -398,14 +399,13 @@ an empty accession and both positions.
 - Network: every fetch hits rest.uniprot.org. The `/stream` request for a large
   proteome (human with GFF) is hundreds of MB and takes minutes; the read timeout is
   60 s per request.
-- `fetch_peff(accessions=...)` requests FASTA with `size=500` from `/search` in one
-  request. For long accession lists, prefer `query=` or write the FASTA yourself
-  (`download-uniprot`) and use `fasta_to_peff`.
+- `fetch_peff(accessions=...)` makes one `/search` request per batch of accessions, so
+  long lists mean many requests. For whole proteomes, prefer `query=`.
 - Passing both `cfg` and keyword flags: the keyword flags are silently ignored.
 - `ModResPsi` / `ModResUnimod` names carry an `M:` / `U:` prefix.
-- Isoform accessions (`P04637-2`) are kept as separate entries, but they fail the
-  accession pattern used for GFF batching, so with `accessions=` or `fasta_to_peff` they
-  get no annotations. The `query=` path keeps whatever GFF UniProt returns for them.
+- Isoform accessions (`P04637-2`) are kept as separate entries and are queried, but
+  UniProt publishes GFF features only for canonical sequences, so isoforms get no
+  annotations; a warning names them.
 - Sibling packages are pinned with floors only, so a new major release of pefftacular
   or an ontology package can change behaviour.
 - Logging: the library uses `logging` (logger names under `peff_uniprot_fetcher`); call

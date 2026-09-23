@@ -10,7 +10,7 @@ from pefftacular import FileHeader, SequenceEntry, write_peff
 
 from peff_uniprot_fetcher._annotations import features_to_annotations
 from peff_uniprot_fetcher._builder import build_entry, build_header
-from peff_uniprot_fetcher._client import fetch_entries, stream_search
+from peff_uniprot_fetcher._client import accession_batches, fetch_entries, stream_search
 from peff_uniprot_fetcher._config import AnnotationConfig
 from peff_uniprot_fetcher._fasta import UniProtFastaEntry, parse_fasta
 from peff_uniprot_fetcher._gff import parse_gff
@@ -21,43 +21,44 @@ log = logging.getLogger(__name__)
 _VARIANT_TYPES = {"Natural variant", "Mutagenesis", "Alternative sequence", "Sequence conflict"}
 _PROCESSED_TYPES = {"Signal peptide", "Transit peptide", "Propeptide", "Chain", "Peptide"}
 
-_GFF_MAX_QUERY_LEN = 1800  # conservative limit below UniProt's ~2000-char query cap
-_UNIPROT_ACCESSION_RE = re.compile(r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$|^[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}$")
+# Primary accessions (https://www.uniprot.org/help/accession_numbers), optionally with an
+# isoform suffix such as "-2".
+_UNIPROT_ACCESSION_RE = re.compile(
+    r"^(?:[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})(?:-[0-9]+)?$"
+)
+_MAX_LOGGED = 10  # how many example accessions to name in warnings
 
 
-def _gff_batches(accessions: list[str]) -> list[list[str]]:
-    """Split accessions into batches whose OR-query fits within the URL limit."""
-    batches: list[list[str]] = []
-    batch: list[str] = []
-    length = 0
-    for acc in accessions:
-        term = f"accession:{acc}"
-        addition = len(term) + (4 if batch else 0)  # " OR " between terms
-        if batch and length + addition > _GFF_MAX_QUERY_LEN:
-            batches.append(batch)
-            batch = [acc]
-            length = len(term)
-        else:
-            batch.append(acc)
-            length += addition
-    if batch:
-        batches.append(batch)
-    return batches
+def _examples(accessions: list[str]) -> str:
+    shown = ", ".join(accessions[:_MAX_LOGGED])
+    return shown + (f", ... (+{len(accessions) - _MAX_LOGGED} more)" if len(accessions) > _MAX_LOGGED else "")
 
 
 def _fetch_gff_per_accession(accessions: list[str]) -> dict[str, list[dict]]:
     valid = [a for a in accessions if _UNIPROT_ACCESSION_RE.match(a)]
-    skipped = len(accessions) - len(valid)
-    if skipped:
-        log.warning("Skipping %d non-UniProt accession(s) (e.g. contaminants)", skipped)
+    rejected = [a for a in accessions if not _UNIPROT_ACCESSION_RE.match(a)]
+    if rejected:
+        log.warning(
+            "%d accession(s) are not UniProt accessions and get NO annotations (e.g. contaminants): %s",
+            len(rejected),
+            _examples(rejected),
+        )
     total = len(valid)
     all_features: dict[str, list[dict]] = {}
     fetched = 0
-    for batch in _gff_batches(valid):
+    for batch in accession_batches(valid):
         fetched += len(batch)
         log.info("Fetching GFF annotations: %d / %d", fetched, total)
         query = " OR ".join(f"accession:{acc}" for acc in batch)
         all_features.update(parse_gff(stream_search(query, fmt="gff")))
+    bare_isoforms = [a for a in valid if "-" in a and a not in all_features]
+    if bare_isoforms:
+        log.warning(
+            "%d isoform accession(s) got NO annotations: UniProt publishes GFF features only for "
+            "canonical sequences, and canonical positions do not apply to other isoforms: %s",
+            len(bare_isoforms),
+            _examples(bare_isoforms),
+        )
     return all_features
 
 

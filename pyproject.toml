@@ -4,7 +4,8 @@ version = "0.2.0"
 description = "Fetch UniProt protein data and generate PEFF (PSI Extended FASTA Format) files."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
@@ -21,15 +22,18 @@ maintainers = [
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
 ]
 
 [project.urls]
 Homepage = "https://tacular-omics.github.io/peff_uniprot_fetcher/"
+Documentation = "https://github.com/tacular-omics/peff_uniprot_fetcher#readme"
 Repository = "https://github.com/tacular-omics/peff_uniprot_fetcher"
 Issues = "https://github.com/tacular-omics/peff_uniprot_fetcher/issues"
 Changelog = "https://github.com/tacular-omics/peff_uniprot_fetcher/blob/main/HISTORY.md"

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+* Requires the 1.x releases of the PEFF and modification libraries:
+  `pefftacular>=1.0,<2`, `psimodpy>=1.0,<2`, `unimodpy>=1.0,<2`, `uniprotptmpy>=1.0,<2`
+  (was the 0.x series). No output change.
+* PSI-MOD formulas are read from `dict_composition` instead of the deprecated
+  `dict_diff_formula` alias (removed in psimodpy 2.0).
+
 ## 0.2.0 (2026-09-23)
 
 ### Changed

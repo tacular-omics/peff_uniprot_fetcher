@@ -9,10 +9,10 @@ license-files = ["LICENSE"]
 keywords = ["proteomics", "bioinformatics", "uniprot", "peff", "fasta", "ptm"]
 dependencies = [
     "httpx>=0.27",
-    "pefftacular>=0.4,<0.5",
-    "psimodpy>=0.2,<0.3",
-    "unimodpy>=0.2,<0.3",
-    "uniprotptmpy>=0.2,<0.3",
+    "pefftacular>=1.0,<2",
+    "psimodpy>=1.0,<2",
+    "unimodpy>=1.0,<2",
+    "uniprotptmpy>=1.0,<2",
 ]
 authors = [
     { name = "Patrick Garrett", email = "pgarrett@scripps.edu" }

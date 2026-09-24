@@ -93,8 +93,8 @@ def _enrich_from_ontologies(
             if psi_num is not None:
                 info = _get_psimod_db().get_by_id(psi_num)
                 if info is not None:
-                    if info.dict_diff_formula:
-                        formula = " ".join(f"{el}{cnt}" for el, cnt in sorted(info.dict_diff_formula.items()))
+                    if info.dict_composition:
+                        formula = " ".join(f"{el}{cnt}" for el, cnt in sorted(info.dict_composition.items()))
                     mono_mass = info.diff_mono
                     avg_mass = info.diff_avg
 

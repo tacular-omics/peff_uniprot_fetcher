@@ -368,11 +368,11 @@ def test_mod_res_branches_independent():
 
 def test_only_known_mass_uses_psimod_delta_mass():
     # MOD:00394 (monoacetylated residue) has a delta mass but no full residue mass;
-    # MOD:00862 (D-alanine) has a full residue mass but no delta mass. only_known_mass
+    # MOD:01928 (N-(L-isoaspartyl)-glycine) has a full residue mass but no delta mass. only_known_mass
     # must judge PSI-MOD by its delta mass, like UNIMOD.
     ptm_map = {
         "DeltaOnly": _make_ptm("DeltaOnly", psi_mod="MOD:00394"),
-        "FullOnly": _make_ptm("FullOnly", psi_mod="MOD:00862"),
+        "FullOnly": _make_ptm("FullOnly", psi_mod="MOD:01928"),
     }
     features = [
         {"feature": "Modified residue", "start": 1, "end": 1, "attributes": {"Note": "DeltaOnly"}},
@@ -381,7 +381,7 @@ def test_only_known_mass_uses_psimod_delta_mass():
     result = features_to_annotations(features, ptm_map, only_known_mass=True)
     assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394"]
     result = features_to_annotations(features, ptm_map, only_known_mass=False)
-    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394", "MOD:00862"]
+    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00394", "MOD:01928"]
 
 
 def test_mod_res_only_without_cv_entry():

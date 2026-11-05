@@ -157,7 +157,7 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 | Natural variant, Mutagenesis, Sequence conflict | `VariantSimple` / `VariantComplex` |
 | Alternative sequence (isoform) | `VariantComplex` |
 | Modified residue (PSI-MOD cross-ref) | `ModResPsi` |
-| Modified residue (UniMod cross-ref) | `ModResUnimod` |
+| Modified residue (UniMod cross-ref, no usable PSI-MOD entry) | `ModResUnimod` |
 | Modified residue (UniProt PTM match, no PSI-MOD/UniMod cross-ref) | `ModRes` |
 | Glycosylation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
 | Lipidation (PTM match) | `ModResPsi` / `ModResUnimod` / `ModRes` |
@@ -168,7 +168,7 @@ The following UniProt GFF feature types are mapped to PEFF annotations:
 | Chain (mature protein) | `Processed` (`PEFF:0001004`) |
 | Peptide | `Processed` (`PEFF:0001005`) |
 
-A modified residue with both a PSI-MOD and UniMod cross-reference appears in both `ModResPsi` and `ModResUnimod` simultaneously. Modifications that cannot be resolved to a known PTM entry are silently skipped.
+Each modified site is written once, from one source: PSI-MOD when the ptmlist entry has a usable PSI-MOD cross-reference, otherwise UniMod, otherwise a generic `ModRes`. Modifications that cannot be resolved to a known PTM entry are silently skipped.
 
 ### PTM name resolution
 

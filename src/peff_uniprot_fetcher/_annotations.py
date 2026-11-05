@@ -69,13 +69,14 @@ def _resolve_modification(
     mod_res_unimod: list[ModResUnimod],
     mod_res: list[ModRes],
 ) -> None:
-    """Look up *mod_name* in *ptm_map* and append resolved annotations.
+    """Look up *mod_name* in *ptm_map* and append one annotation for the site.
 
-    PSI-MOD and UNIMOD are resolved independently, each named with the
-    ontology's own ``name:`` as PEFF 1.0 (sections 3.3.10/3.3.11) requires.
-    A generic ``ModRes`` with the ptmlist id is written only when the entry
-    maps to neither ontology (section 3.3.12).  Names not in *ptm_map*
-    produce nothing.
+    Each site is written once, from one source, in this order of preference:
+    ``ModResPsi`` (PSI-MOD), then ``ModResUnimod`` (UNIMOD) when there is no
+    usable PSI-MOD entry, then a generic ``ModRes`` with the ptmlist id when
+    the entry maps to neither ontology (PEFF 1.0 section 3.3.12).  CV names
+    are the ontology's own ``name:`` (sections 3.3.10/3.3.11).  Names not in
+    *ptm_map* produce nothing.
     """
     ptm = ptm_map.get(mod_name)
     if ptm is None:
@@ -89,10 +90,12 @@ def _resolve_modification(
     if psi_mod_id and psi_mod is not None:
         if not only_known_mass or psi_mod.diff_mono is not None:
             mod_res_psi.append(ModResPsi(positions=positions, accession=psi_mod_id, name=psi_mod.name))
+            return
 
     if unimod_id and unimod is not None:
         if not only_known_mass or unimod.delta_mono_mass is not None:
             mod_res_unimod.append(ModResUnimod(positions=positions, accession=f"UNIMOD:{unimod_id}", name=unimod.name))
+            return
 
     if psi_mod is not None or unimod is not None:
         return

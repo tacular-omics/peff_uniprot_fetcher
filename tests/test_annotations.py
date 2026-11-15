@@ -349,8 +349,8 @@ def test_lipidation_no_ptm_match():
 # -- Continue bug fix tests -------------------------------------------------
 
 
-def test_mod_res_branches_independent():
-    """PSI-MOD and UniMod branches don't short-circuit each other."""
+def test_mod_res_prefers_psimod():
+    """A site with both PSI-MOD and UniMod xrefs is written once, as ModResPsi."""
     features = [
         {
             "feature": "Modified residue",
@@ -360,10 +360,31 @@ def test_mod_res_branches_independent():
         }
     ]
     result = features_to_annotations(features, PTM_MAP)
-    # Phosphoserine has both PSI-MOD and UniMod xrefs; both should resolve.
-    assert len(result["mod_res_psi"]) == 1
-    assert len(result["mod_res_unimod"]) == 1
+    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:00046"]
+    assert result["mod_res_unimod"] == ()
     assert result["mod_res"] == ()
+
+
+def test_mod_res_falls_back_to_unimod():
+    """UniMod is used only when there is no usable PSI-MOD entry for the site."""
+    ptm_map = {
+        # PSI-MOD xref not in the ontology.
+        "UnknownPsi": _make_ptm("UnknownPsi", psi_mod="MOD:99999", unimod=21),
+        # MOD:01928 has no delta mass, so only_known_mass rejects it; UNIMOD:21 has one.
+        "NoPsiMass": _make_ptm("NoPsiMass", psi_mod="MOD:01928", unimod=21),
+    }
+    features = [
+        {"feature": "Modified residue", "start": 1, "end": 1, "attributes": {"Note": "UnknownPsi"}},
+        {"feature": "Modified residue", "start": 2, "end": 2, "attributes": {"Note": "NoPsiMass"}},
+    ]
+    result = features_to_annotations(features, ptm_map, only_known_mass=True)
+    assert result["mod_res_psi"] == ()
+    assert [(m.positions, m.accession) for m in result["mod_res_unimod"]] == [((1,), "UNIMOD:21"), ((2,), "UNIMOD:21")]
+    assert result["mod_res"] == ()
+
+    result = features_to_annotations(features, ptm_map, only_known_mass=False)
+    assert [m.accession for m in result["mod_res_psi"]] == ["MOD:01928"]
+    assert [m.positions for m in result["mod_res_unimod"]] == [(1,)]
 
 
 def test_only_known_mass_uses_psimod_delta_mass():
@@ -407,7 +428,7 @@ def test_mod_res_only_without_cv_entry():
 
 
 def test_peff_output_matches_spec_examples(tmp_path):
-    """Written headers match the PEFF 1.0 examples: (100|MOD:00046|O-phospho-L-serine), (100|UNIMOD:21|Phospho)."""
+    """Written headers match the PEFF 1.0 example (100|MOD:00046|O-phospho-L-serine), with one entry per site."""
     ptm_map = {"Phosphoserine": _make_ptm("Phosphoserine", psi_mod="MOD:00046", unimod=21, ptm_id="PTM-0253")}
     features = [{"feature": "Modified residue", "start": 100, "end": 100, "attributes": {"Note": "Phosphoserine"}}]
     fasta = UniProtFastaEntry(
@@ -427,6 +448,6 @@ def test_peff_output_matches_spec_examples(tmp_path):
     write_peff(build_header([entry]), [entry], out)
     header = next(line for line in out.read_text().splitlines() if line.startswith(">sp:P12345"))
     assert r"\ModResPsi=(100|MOD:00046|O-phospho-L-serine)" in header
-    assert r"\ModResUnimod=(100|UNIMOD:21|Phospho)" in header
+    assert r"\ModResUnimod=" not in header
     assert r"\ModRes=" not in header
     assert "M:" not in header and "U:" not in header

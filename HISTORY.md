@@ -4,6 +4,11 @@
 
 ### Changed
 
+* **Output format change.** Each modified site is written once, from one source,
+  instead of once per ontology. PSI-MOD (`\ModResPsi`) is preferred; `\ModResUnimod`
+  is written only when there is no usable PSI-MOD entry, and `\ModRes` only when the
+  entry maps to neither. Previously a site with both cross-references appeared in both
+  `\ModResPsi` and `\ModResUnimod`. Raised on the HUPO-PSI PEFF call.
 * Requires the 1.x releases of the PEFF and modification libraries:
   `pefftacular>=1.0,<2`, `psimodpy>=1.0,<2`, `unimodpy>=1.0,<2`, `uniprotptmpy>=1.0,<2`
   (was the 0.x series). No output change.
